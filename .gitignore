@@ -192,3 +192,6 @@ pyrightconfig.json
 
 # uci downloaded datasets
 datasets/
+
+# system
+.DS_Store
