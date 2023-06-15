@@ -18,7 +18,7 @@ def execute_choice():
 		filename=str(input("Please enter the full name of the local database i.e. a CSV file including the .csv extension (or you can hit ENTER to accept a default name): "))
 		if filename=='':
 			print()
-			build_local_database('UCI database.csv',msg_flag=True)
+			build_local_database('UCI database.csv', msg_flag=True)
 			local_database='UCI database.csv'
 		else:
 			if filename[-3:]!='csv':
@@ -31,7 +31,7 @@ def execute_choice():
 		filename=str(input("Please enter the full name of the local table i.e. a CSV file including the .csv extension (or you can hit ENTER to accept a default name): "))
 		if filename=='':
 			print()
-			build_local_table('UCI table.csv',msg_flag=True)
+			build_local_table('UCI table.csv', msg_flag=True)
 			local_table='UCI table.csv'
 		else:
 			if filename[-3:]!='csv':
