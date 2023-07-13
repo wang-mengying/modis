@@ -195,3 +195,4 @@ datasets/
 
 # system
 .DS_Store
+*.csv

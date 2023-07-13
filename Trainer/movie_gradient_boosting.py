@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from numpy import NaN
+import time
 import sys
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import GradientBoostingClassifier
@@ -17,9 +18,7 @@ def get_column(df, column):
         return None
 
 
-def load_and_preprocess_data(filename):
-    df = pd.read_csv(filename)
-
+def preprocess_data(df):
     # Replace all empty values
     df = df.replace('-', '0')
     df = df.replace('\\N', '0')
@@ -89,12 +88,21 @@ def train_and_evaluate_model(df):
 
 
 def main():
-    path = sys.argv[1] if len(sys.argv) > 1 else '../Dataset/Movie/movie_merged.csv'
+    dataset_path = "../Dataset/Movie/processed/"
+    filename = sys.argv[1] if len(sys.argv) > 1 else 'movie_cleaned.csv'
+    path = dataset_path + filename
+    df = pd.read_csv(path)
 
-    df = load_and_preprocess_data(path)
+    print(f'Training file: {filename}.')
+    print(f'Size: {df.shape}.')
+
+    df = preprocess_data(df)
+    start_time = time.time()
     accuracy = train_and_evaluate_model(df)
+    running_time = time.time() - start_time
 
-    print(f'The accuracy is: {accuracy}')
+    print(f'Accuracy: {accuracy}.')
+    print(f'Running time: {running_time} s.')
 
 
 if __name__ == '__main__':
