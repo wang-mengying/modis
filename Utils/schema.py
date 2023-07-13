@@ -1,5 +1,12 @@
 import os
 import pandas as pd
+import sys
+from sklearn.feature_selection import SelectPercentile, f_classif, chi2
+from sklearn.preprocessing import LabelEncoder
+
+sys.path.append("../")
+import Trainer.movie_gradient_boosting as mgb
+
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -63,9 +70,31 @@ def row_clean(df, thr_null=0.5, iqr_factor=1.5):
     return df_cleaned
 
 
+# Get selected numeric columns
+def col_numeric(X, y, percentile=90):
+    selector_f_classif = SelectPercentile(f_classif, percentile=percentile)
+    selector_f_classif.fit_transform(X, y)
+
+    num_cols = X.columns[selector_f_classif.get_support()]
+
+    return num_cols
+
+
+# Get selected categorical columns
+def col_categorical(X, y, percentile=80):
+    cat_encoded = X.apply(LabelEncoder().fit_transform)
+
+    selector_chi2 = SelectPercentile(chi2, percentile=percentile)
+    selector_chi2.fit_transform(cat_encoded, y)
+
+    cat_cols = X.columns[selector_chi2.get_support()]
+
+    return cat_cols
+
+
 def main():
     dataset = '../Dataset/Movie/'
-    original_path = dataset + 'movie_original.csv'
+    original_path = dataset + 'processed/movie_original.csv'
     extra_path = dataset + 'extra'
     df_original = pd.read_csv(original_path)
 
@@ -81,6 +110,23 @@ def main():
     # Row-level Clean
     df_cleaned = row_clean(df_original, thr_null=0.5, iqr_factor=2)
     df_cleaned.to_csv(dataset + 'processed/movie_cleaned.csv', index=False)
+
+    # Column-level Filter
+    df = pd.read_csv(dataset + 'processed/movie_cleaned.csv')
+    categorical_cols = ['genres', 'director_professions', 'movie_title', 'director_name']
+    df_num = mgb.preprocess_data(df.drop(categorical_cols, axis=1))
+
+    X_num = df_num.drop(['worldwide_gross', 'gross_class'], axis=1)
+    X_cat = df_cleaned[categorical_cols]
+    y = df_num['gross_class']
+
+    num_cols = col_numeric(X_num, y)
+    cat_cols = col_categorical(X_cat, y)
+
+    df_filtered = pd.concat([pd.DataFrame(df, columns=num_cols),
+                             pd.DataFrame(df, columns=cat_cols),
+                             pd.DataFrame(df, columns=['worldwide_gross']), ], axis=1)
+    df_filtered.to_csv(dataset + 'processed/movie_filtered.csv', index=False)
 
 
 if __name__ == '__main__':

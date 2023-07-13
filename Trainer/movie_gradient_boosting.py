@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from numpy import NaN
 import time
 import sys
 from sklearn.model_selection import train_test_split
@@ -22,7 +21,7 @@ def preprocess_data(df):
     # Replace all empty values
     df = df.replace('-', '0')
     df = df.replace('\\N', '0')
-    df = df.replace(NaN, '0')
+    df = df.replace(np.NaN, '0')
 
     # Replace 'alive' with the current year in 'director_deathYear' column
     df['director_deathYear'] = get_column(df, 'director_deathYear').replace('alive', '2023')
@@ -32,9 +31,9 @@ def preprocess_data(df):
     df['director_deathYear'] = get_column(df, 'director_deathYear').astype(int)
 
     # Convert 'production_date' to datetime and then extract the year
-    df['production_date'] = pd.to_datetime(get_column(df, 'production_date'))
-    df['production_year'] = get_column(df, 'production_date').dt.year
     if 'production_date' in df.columns:
+        df['production_date'] = pd.to_datetime(df['production_date'])
+        df['production_year'] = get_column(df, 'production_date').dt.year
         df = df.drop('production_date', axis=1)
 
     # Binary encode the 'movie_title' and 'director_name'columns
@@ -89,7 +88,7 @@ def train_and_evaluate_model(df):
 
 def main():
     dataset_path = "../Dataset/Movie/processed/"
-    filename = sys.argv[1] if len(sys.argv) > 1 else 'movie_cleaned.csv'
+    filename = sys.argv[1] if len(sys.argv) > 1 else 'movie_filtered.csv'
     path = dataset_path + filename
     df = pd.read_csv(path)
 
