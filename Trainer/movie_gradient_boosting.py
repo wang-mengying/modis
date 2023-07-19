@@ -88,7 +88,7 @@ def train_and_evaluate_model(df):
 
 def main():
     dataset_path = "../Dataset/Movie/processed/"
-    filename = sys.argv[1] if len(sys.argv) > 1 else 'movie_filtered.csv'
+    filename = sys.argv[1] if len(sys.argv) > 1 else 'movie_merged.csv'
     path = dataset_path + filename
     df = pd.read_csv(path)
 
