@@ -196,4 +196,4 @@ datasets/
 # system
 .DS_Store
 *.csv
-Dataset/
+Dataset/*/*.csv
