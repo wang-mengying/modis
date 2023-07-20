@@ -16,7 +16,7 @@ def extract_counts(label):
     return sum(items), sum(values)
 
 
-def get_sample(df, n_samples=300):
+def get_sample(df, n_samples=500):
     df[['active_items', 'active_values']] = df['Label'].apply(extract_counts).apply(pd.Series)
     df['stratum'] = df['active_items'].astype(str) + '-' + df['active_values'].astype(str)
 
@@ -52,10 +52,10 @@ def process_data(node_label, original_file, clustered_file):
 
 
 def train_model(df_sample, original_file, clustered_file):
-    df_sample['accuracy'] = 0.0
-    df_sample['time'] = 0.0
     df_sample['num_rows'] = 0
     df_sample['num_cols'] = 0
+    df_sample['accuracy'] = 0.0
+    df_sample['time'] = 0.0
 
     for i, row in df_sample.iterrows():
         node_id = row['Id']
@@ -64,6 +64,9 @@ def train_model(df_sample, original_file, clustered_file):
         node_label = row['Label']
         df = process_data(node_label, original_file, clustered_file)
 
+        df_sample.loc[i, 'num_rows'] = df.shape[0]
+        df_sample.loc[i, 'num_cols'] = df.shape[1]
+
         df = mgb.preprocess_data(df)
         start_time = time.time()
         accuracy = mgb.train_and_evaluate_model(df)
@@ -71,8 +74,6 @@ def train_model(df_sample, original_file, clustered_file):
 
         df_sample.loc[i, 'accuracy'] = accuracy
         df_sample.loc[i, 'time'] = running_time
-        df_sample.loc[i, 'num_rows'] = df.shape[0]
-        df_sample.loc[i, 'num_cols'] = df.shape[1]
 
     return df_sample
 
