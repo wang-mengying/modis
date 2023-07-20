@@ -36,7 +36,7 @@ def igraph_table(L, k):
     drop_states = sum(comb(n, i) for i in range(math.floor(0.7 * n), n + 1))
 
     # states from "modify"
-    modify_states = sum(comb(k, i) for i in range(math.ceil(0.7 * k), k + 1))
+    modify_states = sum(comb(k, i) for i in range(math.ceil(0.8 * k), k + 1))
 
     total = drop_states * modify_states
 

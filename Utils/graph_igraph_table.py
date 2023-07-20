@@ -5,7 +5,7 @@ import csv
 import time
 
 
-def generate_graph(L, k):
+def generate_graph(L, k, t_drop=0.7, t_modify=0.8):
     n = len(L)
     graph = Graph(directed=True)
     state_to_id = {}
@@ -26,7 +26,7 @@ def generate_graph(L, k):
         current_node_id = state_to_id[current_node]
         items_status, values_status = current_node
         # "drop": deactivate an active item, remain at least 70% items as active
-        if sum(items_status) > 0.7 * n:
+        if sum(items_status) > t_drop * n:
             for i in range(n):
                 if items_status[i] == 1:
                     new_items_status = list(items_status)
@@ -41,12 +41,12 @@ def generate_graph(L, k):
                         queue.append(new_node)
 
                 # "modify": try dropping each value of the state, remain at least ceil(0.7 * k) values
-                for j in range(1, k - math.ceil(0.7 * k) + 1):
+                for j in range(1, k - math.ceil(t_modify * k) + 1):
                     for subset in combinations(range(k), j):
                         new_values_status = list(values_status)
                         for value in subset:
                             new_values_status[value] = 0
-                        if sum(new_values_status) >= math.ceil(0.7 * k):
+                        if sum(new_values_status) >= math.ceil(t_modify * k):
                             new_node = (items_status, tuple(new_values_status))
                             new_id = get_vertex_id(new_node)
                             if not graph.are_connected(current_node_id,new_id):
