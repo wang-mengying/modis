@@ -33,7 +33,7 @@ def generate_graph(L, k):
                     new_items_status[i] = 0
                     new_node = (tuple(new_items_status), values_status)
                     new_id = get_vertex_id(new_node)
-                    # print(new_id)
+                    print(new_id)
                     if not graph.are_connected(current_node_id, new_id):
                         edge = graph.add_edge(current_node_id, new_id)
                         graph.es[edge.index]["type"] = "drop"
@@ -57,15 +57,15 @@ def generate_graph(L, k):
     return graph, state_to_id
 
 
-# L = [5, 5, 5, 5, 8]
-# k = 10
+L = [5, 5, 8, 5, 5, 5, 5, 5, 5, 5, 5]
+k = 11
 # L = [2, 3]
 # k = 5
 start = time.time()
 graph, state_to_id = generate_graph(L, k)
 end = time.time()
 print(end - start)
-dataset = "..\\Dataset\\Movie\\others\\"
+dataset = "../Dataset/Movie/others/"
 
 
 # Nodes
