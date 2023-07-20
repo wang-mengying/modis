@@ -24,11 +24,15 @@ def preprocess_data(df):
     df = df.replace(np.NaN, '0')
 
     # Replace 'alive' with the current year in 'director_deathYear' column
-    df['director_deathYear'] = get_column(df, 'director_deathYear').replace('alive', '2023')
+    director_deathYear = get_column(df, 'director_deathYear')
+    if director_deathYear is not None:
+        df['director_deathYear'] = director_deathYear.replace('alive', '2023')
+        df['director_deathYear'] = df['director_deathYear'].astype(int)
 
     # Convert 'director_birthYear' and 'director_deathYear' to integers
-    df['director_birthYear'] = get_column(df, 'director_birthYear').astype(int)
-    df['director_deathYear'] = get_column(df, 'director_deathYear').astype(int)
+    director_birthYear = get_column(df, 'director_birthYear')
+    if director_birthYear is not None:
+        df['director_birthYear'] = director_birthYear.astype(int)
 
     # Convert 'production_date' to datetime and then extract the year
     if 'production_date' in df.columns:
@@ -72,6 +76,9 @@ def multi_label_binarization(df, column):
 
 
 def train_and_evaluate_model(df):
+    df = df.fillna(df.mean())
+    df = df.dropna()
+
     X = df.drop(['worldwide_gross', 'gross_class'], axis=1)
     y = df['gross_class']
 

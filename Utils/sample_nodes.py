@@ -1,5 +1,13 @@
+import time
+import sys
 import pandas as pd
 import numpy as np
+
+sys.path.append("../")
+import Trainer.movie_gradient_boosting as mgb
+
+import warnings
+warnings.filterwarnings("ignore")
 
 
 # Count of active items/values
@@ -24,7 +32,7 @@ def get_sample(df, n_samples=300):
     return sample
 
 
-def process_data(node_label, node_id, original_file, clustered_file, path):
+def process_data(node_label, original_file, clustered_file):
     df_o = pd.read_csv(original_file)
     df_c = pd.read_csv(clustered_file)
 
@@ -39,30 +47,49 @@ def process_data(node_label, node_id, original_file, clustered_file, path):
     drop_rows = df_c[df_c['cluster'].isin(inactive_rows)].index
     df.drop(drop_rows, inplace=True)
 
-    df.to_csv(f'{path}{node_id}.csv', index=False)
+    # df.to_csv(f'{path}{node_id}.csv', index=False)
+    return df
 
 
-def process_all(df_sample, original_file, clustered_file, path):
-    for _, row in df_sample.iterrows():
+def train_model(df_sample, original_file, clustered_file):
+    df_sample['accuracy'] = 0.0
+    df_sample['time'] = 0.0
+    df_sample['num_rows'] = 0
+    df_sample['num_cols'] = 0
+
+    for i, row in df_sample.iterrows():
         node_id = row['Id']
-        node_label = row['Label']
-        process_data(node_label, node_id, original_file, clustered_file, path)
+        print(f"Processing node {node_id}.")
 
-    print("Processing complete.")
+        node_label = row['Label']
+        df = process_data(node_label, original_file, clustered_file)
+
+        df = mgb.preprocess_data(df)
+        start_time = time.time()
+        accuracy = mgb.train_and_evaluate_model(df)
+        running_time = time.time() - start_time
+
+        df_sample.loc[i, 'accuracy'] = accuracy
+        df_sample.loc[i, 'time'] = running_time
+        df_sample.loc[i, 'num_rows'] = df.shape[0]
+        df_sample.loc[i, 'num_cols'] = df.shape[1]
+
+    return df_sample
 
 
 def main():
     path = "../Dataset/Movie/"
     df = pd.read_csv(path + 'others/d7m7/nodes.csv')
 
+    print("Sampling ......")
     sample = get_sample(df)
     sample.to_csv(path + 'others/sample_nodes.csv', index=False)
 
-    # label = "((1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1), (0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0))"
-    # id = 1575
-    process_all(sample, path + 'processed/movie_filtered.csv',
-                path + 'others/movie_clustered_table.csv',
-                path + 'others/sample/')
+    print("Start training ......")
+    sample = train_model(sample, path + 'processed/movie_filtered.csv',
+                         path + 'others/movie_clustered_table.csv')
+
+    sample.to_csv(path + 'others/sample_nodes.csv', index=False)
 
 
 if __name__ == '__main__':
