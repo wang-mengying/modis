@@ -14,29 +14,26 @@ def igraph_add(L):
 def igraph_drop(L):
     n = len(L)
     total = 0
-    max_drop_items = math.ceil(n - 0.7 * n)  # max number of items that can be dropped
-    for i in range(n - max_drop_items, n+1):  # from n - ceil(n - 0.7n) to n
-        # combinations of active items
+    max_drop_items = math.ceil(n - 0.7 * n)
+    for i in range(n - max_drop_items, n+1):
         for active_items in combinations(range(n), i):
             num_combinations = 1
-            # for each active item
             for item in active_items:
                 t = L[item]
-                # number of value combinations
                 num_values = sum(comb(t, j, exact=True) for j in range(t - math.ceil(t/10), t + 1))
                 num_combinations *= num_values
             total += num_combinations
     return total
 
 
-def igraph_table(L, k):
+def igraph_table(L, k, d, m):
     n = len(L)
 
     # states from "drop"
-    drop_states = sum(comb(n, i) for i in range(math.floor(0.7 * n), n + 1))
+    drop_states = sum(comb(n, i) for i in range(math.floor(d * n), n + 1))
 
     # states from "modify"
-    modify_states = sum(comb(k, i) for i in range(math.ceil(0.8 * k), k + 1))
+    modify_states = sum(comb(k, i) for i in range(math.ceil(m * k), k + 1))
 
     total = drop_states * modify_states
 
@@ -46,6 +43,6 @@ def igraph_table(L, k):
 schema = [5, 5, 8, 5, 5, 5, 5, 5, 5, 5, 5]
 cluster = 11
 
-print(igraph_add(schema), igraph_drop(schema), igraph_table(schema, cluster))
+print(igraph_add(schema), igraph_drop(schema), igraph_table(schema, cluster, 0.7, 0.8))
 
 # 2824752490, 2792361600, 130384

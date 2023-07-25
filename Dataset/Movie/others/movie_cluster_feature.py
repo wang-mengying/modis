@@ -15,7 +15,7 @@ max_clusters = 25
 cluster_k = {}
 
 
-def optimal_kmeans(feature, max_clusters):
+def optimal_kmeans(feature, min_clusters, max_clusters):
     best_score = -1
     best_clusters = 0
     best_labels = None
@@ -33,7 +33,7 @@ def optimal_kmeans(feature, max_clusters):
 
 
 def clustering(data, col):
-    clusters, labels = optimal_kmeans(data[[col, target]], max_clusters)
+    clusters, labels = optimal_kmeans(data[[col, target]], min_clusters, max_clusters)
     data[col] = labels
     cluster_k[col] = clusters
 
@@ -65,7 +65,7 @@ vectorizer = CountVectorizer(tokenizer=lambda x: x.split(', '))
 genres_encoded = vectorizer.fit_transform(data['genres'])
 genres_encoded_df = pd.DataFrame(genres_encoded.toarray(), columns=vectorizer.get_feature_names_out())
 concatenated_df = pd.concat([genres_encoded_df, data['worldwide_gross']], axis=1)
-clusters, labels = optimal_kmeans(concatenated_df, max_clusters)
+clusters, labels = optimal_kmeans(concatenated_df, min_clusters, max_clusters)
 data['genres'] = labels
 cluster_k['genres'] = clusters
 
