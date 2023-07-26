@@ -79,18 +79,19 @@ def train_model(df_sample, original_file, clustered_file):
 
 
 def main():
-    path = "../Dataset/Movie/"
-    df = pd.read_csv(path + 'others/d7m7/nodes.csv')
+    dataset = "../Dataset/Movie/"
+    surrogate = "../Surrogate/Movie/"
+    df = pd.read_csv(dataset + 'others/d7m7/nodes.csv')
 
     print("Sampling ......")
     sample = get_sample(df)
-    sample.to_csv(path + 'others/sample_nodes.csv', index=False)
+    sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
 
     print("Start training ......")
-    sample = train_model(sample, path + 'processed/movie_filtered.csv',
-                         path + 'others/movie_clustered_table.csv')
+    sample = train_model(sample, dataset + 'processed/movie_filtered.csv',
+                         dataset + 'others/movie_clustered_table.csv')
 
-    sample.to_csv(path + 'others/sample_nodes.csv', index=False)
+    sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
 
 
 if __name__ == '__main__':
