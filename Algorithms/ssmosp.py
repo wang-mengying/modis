@@ -1,52 +1,106 @@
-import networkx as nx
+import copy
+import math
 import numpy as np
-from typing import Dict, List, Tuple
+import networkx as nx
+import pandas as pd
 from collections import defaultdict
 
+dataset = "../Example/medium/t_cluster/"
+nodes_df = pd.read_csv(dataset + 'nodes.csv')
+edges_df = pd.read_csv(dataset + 'edges.csv')
 
-def SSMOSP(G: nx.DiGraph, start: str, bc: List, bc_thresholds: np.array, approx_ratios: List) -> Dict:
-    # Todo: SSMOSP Algorithm, fill in details, trans graph to dynamic
+# Construct graph
+G = nx.from_pandas_edgelist(edges_df, 'Source', 'Target', edge_attr=['Type', 'Values'], create_using=nx.DiGraph())
+labels_dict = nodes_df.set_index('Id')['Label'].to_dict()
+nx.set_node_attributes(G, labels_dict, 'Label')
 
-    pareto = defaultdict(dict)
+r = [0.2, 0.3, 0.2, 0.3]
+t = [2, 2]
 
-    for i in range(1, G.number_of_nodes()):
-        for v in G.nodes():
-            if is_end_node(v):
+
+def cal_costs_benefits(source_id, target_id):
+    # TODO replace with objectives
+    cost_1 = np.random.randint(1, source_id+10)
+    cost_2 = np.random.randint(1, target_id+10)
+    benefit_1 = np.random.randint(1, source_id+10)
+    benefit_2 = np.random.randint(1, target_id+10)
+    return [cost_1, cost_2], [benefit_1, benefit_2]
+
+
+def costs_benefits(G):
+    all_costs = []
+    all_benefits = []
+    for u, v, l in G.edges(data=True):
+        source_id = u
+        target_id = v
+        c, b = cal_costs_benefits(source_id, target_id)
+        l['c'] = c
+        l['b'] = b
+        all_costs.append(c)
+        all_benefits.append(b)
+    return all_costs, all_benefits
+
+
+all_costs, all_benefits = costs_benefits(G)
+c_min = np.min(all_costs, axis=0)
+b_max = np.max(all_benefits, axis=0)
+
+
+def pos(q:tuple, r: list):
+    pos_q = []
+
+    # Costs
+    for i in range(len(q[1])):
+        pos_q.append(math.floor(math.log(q[1][i] / c_min[i], r[i])))
+
+    # Benefits
+    for i in range(len(q[2])):
+        pos_q.append(math.floor(math.log(q[2][i] / b_max[i], r[i + len(q[1])])))
+
+    return tuple(pos_q)
+
+
+def get_pareto(G, s, r, t):
+    n = len(G)
+    Pi = defaultdict(lambda: defaultdict(dict))
+    Pi[s][0] = {(None, tuple([0, 0]), tuple([0, 0]), None, None): None}
+    for i in range(1, n):
+        for v in G.nodes:
+            print(f"v: {v}, i: {i}")
+            print(f"Before: {Pi[v][i]}")
+            Pi[v][i] = copy.deepcopy(Pi[v][i-1])
+            print(f"After: {Pi[v][i]}")
+            for u in G.predecessors(v):
+                Pi[v][i] = extend_and_merge(Pi[v][i], Pi[u][i - 1], G[u][v], r, t)
+
+    return Pi
+
+
+def extend_and_merge(R, Q, e, r, t):
+    print(f"Q: {Q}")
+    for p in Q:
+        print(f"p: {p}")
+        if p[0] is None:
+            q = (e['Type'],
+                 tuple(p_c + e_c for p_c, e_c in zip(p[1], e['c'])),
+                 tuple(p_b + e_b for p_b, e_b in zip(p[2], e['b'])),
+                 p, e)
+        else:
+            q = (str(p[0]) + e['Type'],
+                 tuple(p_c + e_c for p_c, e_c in zip(p[1], e['c'])),
+                 tuple(p_b + e_b for p_b, e_b in zip(p[2], e['b'])),
+                 p, e)
+        print(f"q: {q}")
+        for i in range(len(q[1])):
+            if q[1][i] > t[i]:
                 continue
-
-    for u in G.predecessors(v):
-        e = G.edges[(u, v)]
-
-        for _, p in pareto[u].items():
-            if len(p['operations']) >= 3:
-                continue
-
-            p_prime = extend_path(p, e)
-
-            pos = compute_position(p_prime['bc'], approx_ratios)
-
-            if pos not in pareto[v] or compare_paths(p_prime['bc'], pareto[v][pos]['bc']):
-                pareto[v][pos] = p_prime
-
-    return pareto
+        pos_q = pos(q, r)
+        if pos_q not in R or R[pos_q][2][0] < q[2][0]:
+            R[pos_q] = q
+        print(f"R: {R}")
+    return R
 
 
-def extend_path(p: Dict, e: Dict) -> Dict:
-    q = p.copy()
+pareto_set = get_pareto(G, 0, r, t)
 
-    # Todo: "Extend" part for SSMOSP
-
-    return q
-
-
-def is_end_node(node: Tuple) -> bool:
-    return all(flag == 1 for _, flag in node)
-
-
-def compute_position(bc: np.array, approx_ratios: List) -> Tuple:
-    return tuple(int(np.log(cost) / scale) for cost, scale in zip(bc, approx_ratios))
-
-
-def compare_paths(bc1: np.array, bc2: np.array) -> bool:
-    # Todo: Add exact objective
-    return all(b1 <= b2 for b1, b2 in zip(bc1, bc2))
+pareto_set

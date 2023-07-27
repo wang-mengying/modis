@@ -10,7 +10,7 @@ CREATE (:Node {id: row.Id, label: row.Label});
 LOAD CSV WITH HEADERS FROM "file:/movie_d7m8/edges.csv" AS row
 MATCH (source:Node {id: row.Source})
 MATCH (target:Node {id: row.Target})
-CALL apoc.create.relationship(source, row.Type, {label: row.Label}, target) YIELD rel
+CALL apoc.create.relationship(source, row.Type, {label: row.Values}, target) YIELD rel
 RETURN rel;
 
 
