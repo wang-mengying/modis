@@ -26,11 +26,16 @@ def get_X_y(df):
 
     df.drop(columns=['Label', 'stratum'], inplace=True)
 
-    feature_cols = [col for col in df.columns if col not in ['Id', 'time', 'accuracy']]
-    target_cols = ['time', 'accuracy']
+    feature_cols = [col for col in df.columns if col not in ['Id', 'training_time', 'accuracy', 'complexity']]
+    target_cols = ['training_time', 'accuracy', 'complexity']
 
     X = df[feature_cols]
     y = df[target_cols]
+
+    # complexity = node/active_items
+    y['relative_complexity'] = y['complexity'] / X['active_items']
+    y['complexity'] = y['relative_complexity']
+    y.drop('relative_complexity', axis=1, inplace=True)
 
     return X, y
 
@@ -47,12 +52,15 @@ def train_pred(X, y, model_path="movie_surrogate.joblib"):
 
     y_pred = model.predict(X_test)
 
-    metric = {'mse_time': mean_squared_error(y_test['time'], y_pred[:, 0]),
+    metric = {'mse_time': mean_squared_error(y_test['training_time'], y_pred[:, 0]),
               'mse_accuracy': mean_squared_error(y_test['accuracy'], y_pred[:, 1]),
-              'r2_time': r2_score(y_test['time'], y_pred[:, 0]),
+              'mse_complexity': mean_squared_error(y_test['complexity'], y_pred[:, 2]),
+              'r2_time': r2_score(y_test['training_time'], y_pred[:, 0]),
               'r2_accuracy': r2_score(y_test['accuracy'], y_pred[:, 1]),
-              'mape_time': np.mean(np.abs((y_test['time'] - y_pred[:, 0]) / y_test['time'])) * 100,
-              'mape_accuracy': np.mean(np.abs((y_test['accuracy'] - y_pred[:, 1]) / y_test['accuracy'])) * 100}
+              'r2_complexity': r2_score(y_test['complexity'], y_pred[:, 2]),
+              'mape_time': np.mean(np.abs((y_test['training_time'] - y_pred[:, 0]) / y_test['training_time'])) * 100,
+              'mape_accuracy': np.mean(np.abs((y_test['accuracy'] - y_pred[:, 1]) / y_test['accuracy'])) * 100,
+              "mape_complexity": np.mean(np.abs((y_test['complexity'] - y_pred[:, 2]) / y_test['complexity'])) * 100}
 
     return metric
 
@@ -66,12 +74,15 @@ def main():
     for key, value in metrics.items():
         print(f"{key}: {value}")
 
-    # mse_time: 0.013112148344765815
+    # mse_time: 0.01365497143443009
     # mse_accuracy: 0.0003146473320577315
-    # r2_time: 0.8115984219329653
+    # mse_complexity: 46.49592482366314
+    # r2_time: 0.798556067583752
     # r2_accuracy: 0.9626916950332823
-    # mape_time: 6.6159298918394835
+    # r2_complexity: 0.9859198659682977
+    # mape_time: 6.344140837105562
     # mape_accuracy: 1.7656642057062257
+    # mape_complexity: 0.885800016908306
 
 
 if __name__ == '__main__':

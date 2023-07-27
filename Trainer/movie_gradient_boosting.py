@@ -76,6 +76,7 @@ def multi_label_binarization(df, column):
 
 
 def train_and_evaluate_model(df):
+    #TODO: return a dictionary, complexity = nodes/active_features
     df = df.fillna(df.mean())
     df = df.dropna()
 
@@ -85,17 +86,20 @@ def train_and_evaluate_model(df):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     model = GradientBoostingClassifier(random_state=42)
+    start = time.time()
     model.fit(X_train, y_train)
+    training_time = time.time() - start
 
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
+    complexity = sum(tree.tree_.node_count for tree in model.estimators_.ravel())
 
-    return accuracy
+    return training_time, accuracy, complexity
 
 
 def main():
     dataset_path = "../Dataset/Movie/"
-    filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_merged.csv'
+    filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
     path = dataset_path + filename
     df = pd.read_csv(path)
 
@@ -103,12 +107,11 @@ def main():
     print(f'Size: {df.shape}.')
 
     df = preprocess_data(df)
-    start_time = time.time()
-    accuracy = train_and_evaluate_model(df)
-    running_time = time.time() - start_time
+    training_time, accuracy, complexity = train_and_evaluate_model(df)
 
     print(f'Accuracy: {accuracy}.')
-    print(f'Running time: {running_time} s.')
+    print(f'Complexity: {complexity}.')
+    print(f'Training time: {training_time} s.')
 
 
 if __name__ == '__main__':

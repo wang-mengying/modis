@@ -1,41 +1,67 @@
 import numpy as np
+import pandas as pd
 from statsmodels.stats.outliers_influence import variance_inflation_factor
-from sklearn.feature_selection import mutual_info_regression
+from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
 
 
 # Fisher Score
-def fisher(X, y):
-    # Split samples according to class
-    X1 = X[y == 0]
-    X2 = X[y == 1]
+def multi_class_fisher_score(X, y):
+    # Number of classes
+    num_classes = len(np.unique(y))
 
-    # Means and variances
-    m1, m2 = np.mean(X1), np.mean(X2)
-    var1, var2 = np.var(X1), np.var(X2)
+    # Mean of the entire feature
     m = np.mean(X)
 
-    # Class probabilities
-    p1 = len(X1) / len(X)
-    p2 = len(X2) / len(X)
+    # Class probabilities, means, and variances
+    p = np.zeros(num_classes)
+    m_k = np.zeros(num_classes)
+    var_k = np.zeros(num_classes)
+
+    for k in range(num_classes):
+        X_k = X[y == k]
+        p[k] = len(X_k) / len(X)
+        m_k[k] = np.mean(X_k)
+        var_k[k] = np.var(X_k)
 
     # Fisher score
-    between_class_variance = p1 * (m1 - m) ** 2 + p2 * (m2 - m) ** 2
-    within_class_variance = p1 * var1 + p2 * var2
+    between_class_variance = np.sum(p * (m_k - m) ** 2)
+    within_class_variance = np.sum(p * var_k)
     fisher_score = between_class_variance / within_class_variance
 
     return fisher_score
 
 
-# Mutual Information
-def mi(X, y):
-    mi = mutual_info_regression(X, y)
+def mean_fisher(X, y):
+    fisher_scores = {column: multi_class_fisher_score(X[column], y) for column in X.columns}
+    fisher_scores_df = pd.DataFrame.from_dict(fisher_scores, orient='index', columns=['Fisher Score'])
 
-    return mi
+    return fisher_scores_df['Fisher Score'].mean()
+
+
+# Mutual Information
+def mean_mi(X, y, regression=True):
+    if regression:
+        mutual_info = mutual_info_regression(X, y)
+    else:
+        mutual_info = mutual_info_classif(X, y)
+
+    mutual_info_df = pd.DataFrame(mutual_info, index=X.columns, columns=['Mutual Information'])
+
+    return mutual_info_df['Mutual Information'].mean()
+
+
+# Variance Inflation Factor (VIF)
+def mean_vif(X):
+    vif = pd.DataFrame()
+    vif['index'] = X.columns
+    vif['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+
+    return vif["VIF"].mean()
 
 
 # Bayesian information criterion (BIC)
 def bic(model, X, y):
-    # TODO: For linear regression temporarily, change n_samples later
+    # For linear/logist regression
     n_samples = X.shape[0]
     n_params = len(model.coef_) + 1
     log_likelihood = model.score(X, y)
@@ -44,11 +70,4 @@ def bic(model, X, y):
     bic = np.log(n_samples) * n_params - 2 * log_likelihood
 
     return bic
-
-
-# Variance Inflation Factor (VIF)
-def vif(X, y):
-    vif = variance_inflation_factor(X, y)
-
-    return vif
 

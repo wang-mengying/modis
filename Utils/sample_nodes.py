@@ -1,4 +1,3 @@
-import time
 import sys
 import pandas as pd
 import numpy as np
@@ -55,7 +54,8 @@ def train_model(df_sample, original_file, clustered_file):
     df_sample['num_rows'] = 0
     df_sample['num_cols'] = 0
     df_sample['accuracy'] = 0.0
-    df_sample['time'] = 0.0
+    df_sample['complexity'] = 0.0
+    df_sample['training_time'] = 0.0
 
     for i, row in df_sample.iterrows():
         node_id = row['Id']
@@ -68,12 +68,11 @@ def train_model(df_sample, original_file, clustered_file):
         df_sample.loc[i, 'num_cols'] = df.shape[1]
 
         df = mgb.preprocess_data(df)
-        start_time = time.time()
-        accuracy = mgb.train_and_evaluate_model(df)
-        running_time = time.time() - start_time
+        training_time, accuracy, complexity = mgb.train_and_evaluate_model(df)
 
         df_sample.loc[i, 'accuracy'] = accuracy
-        df_sample.loc[i, 'time'] = running_time
+        df_sample.loc[i, 'complexity'] = complexity
+        df_sample.loc[i, 'training_time'] = training_time
 
     return df_sample
 
