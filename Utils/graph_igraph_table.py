@@ -60,18 +60,18 @@ def generate_graph(L, k, t_drop=0.7, t_modify=0.8):
     return graph, state_to_id
 
 
-L = [5, 5, 8, 5, 5, 5, 5, 5, 5, 5, 5]
-k = 11
+# L = [5, 5, 8, 5, 5, 5, 5, 5, 5, 5, 5]
+# k = 11
 # L = [5, 5, 5, 5, 8]
 # k = 10
-# L = [2, 3]
-# k = 5
+L = [2, 3]
+k = 5
 start = time.time()
 graph, state_to_id = generate_graph(L, k)
 end = time.time()
 print(end - start)
-dataset = "../Dataset/Movie/others/"
-# dataset = "../Example/medium/t_cluster/"
+# dataset = "../Dataset/Movie/others/"
+dataset = "../Example/small/t_cluster/"
 
 
 # Nodes

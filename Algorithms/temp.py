@@ -5,7 +5,7 @@ import networkx as nx
 import pandas as pd
 from collections import defaultdict
 
-dataset = "../Example/small/t_cluster/"
+dataset = "../Example/medium/t_cluster/"
 nodes_df = pd.read_csv(dataset + 'nodes.csv')
 edges_df = pd.read_csv(dataset + 'edges.csv')
 
@@ -15,7 +15,7 @@ labels_dict = nodes_df.set_index('Id')['Label'].to_dict()
 nx.set_node_attributes(G, labels_dict, 'Label')
 
 r = [0.2, 0.3, 0.2, 0.3]
-t = [1000, 1000]
+t = [2, 2]
 
 
 def cal_costs_benefits(source_id, target_id):
@@ -65,44 +65,34 @@ def get_pareto(G, s, r, t):
     """
     n = len(G)
     Pi = defaultdict(lambda: defaultdict(dict))
-    Pi[s][0][0] = (None, tuple([0, 0]), tuple([0, 0]), None, None)
+    Pi[s][0] = {(None, tuple([0, 0]), tuple([0, 0]), None, None): None}
     for i in range(1, n):
         for v in G.nodes:
-            # print(f"Before: {Pi[v][i]}")
             Pi[v][i] = copy.deepcopy(Pi[v][i - 1])
-            # print(f"After: {Pi[v][i]}")
             for u in G.predecessors(v):
-                print(f"v: {v}, u: {u}, i: {i}")
                 Pi[v][i] = extend_and_merge(Pi[v][i], Pi[u][i - 1], G[u][v], r, t)
 
     return Pi
 
 
 def extend_and_merge(R, Q, e, r, t):
-    print(f"Q: {Q}")
-    for p in Q.values():
-        # print(f"p: {p}")
+    for p in Q:
         if p[0] is None:
-            q = ([e['Type']],
+            q = (e['Type'],
                  tuple(p_c + e_c for p_c, e_c in zip(p[1], e['c'])),
                  tuple(p_b + e_b for p_b, e_b in zip(p[2], e['b'])),
                  p, e)
         else:
-            print(f"e: {e}")
-            q = (p[0].append(e['Type']),
+            q = (str(p[0]) + e['Type'],
                  tuple(p_c + e_c for p_c, e_c in zip(p[1], e['c'])),
                  tuple(p_b + e_b for p_b, e_b in zip(p[2], e['b'])),
                  p, e)
-        print(f"q: {q}")
-        # Guarantee cost under threshold
-        if any(x > y for x, y in zip(q[1], t)):
-            print("True")
-            continue
+        for i in range(len(q[1])):
+            if q[1][i] > t[i]:
+                continue
         pos_q = pos(q, r)
-        # print(f"pos_q: {pos_q}")
         if pos_q not in R or R[pos_q][2][0] < q[2][0]:
             R[pos_q] = q
-    print(f"R: {R}")
     return R
 
 
