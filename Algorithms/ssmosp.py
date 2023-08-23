@@ -1,4 +1,6 @@
 import copy
+import json
+import logging
 import math
 import numpy as np
 import networkx as nx
@@ -6,6 +8,7 @@ import pandas as pd
 from collections import defaultdict
 
 dataset = "../Example/small/t_cluster/"
+logging.basicConfig(filename=dataset+'log_ssmosp.txt', level=logging.INFO, format='%(message)s')
 nodes_df = pd.read_csv(dataset + 'nodes.csv')
 edges_df = pd.read_csv(dataset + 'edges.csv')
 
@@ -13,9 +16,6 @@ edges_df = pd.read_csv(dataset + 'edges.csv')
 G = nx.from_pandas_edgelist(edges_df, 'Source', 'Target', edge_attr=['Type', 'Values'], create_using=nx.DiGraph())
 labels_dict = nodes_df.set_index('Id')['Label'].to_dict()
 nx.set_node_attributes(G, labels_dict, 'Label')
-
-r = [0.2, 0.3, 0.2, 0.3]
-t = [1000, 1000]
 
 
 def cal_costs_benefits(source_id, target_id):
@@ -41,8 +41,10 @@ def costs_benefits(G):
     return all_costs, all_benefits
 
 
-def pos(q: tuple, r: list):
+def pos(q: tuple, r: list, all_costs, all_benefits):
     pos_q = []
+    c_min = np.min(all_costs, axis=0)
+    b_max = np.max(all_benefits, axis=0)
 
     # Costs
     for i in range(len(q[1])):
@@ -55,61 +57,67 @@ def pos(q: tuple, r: list):
     return tuple(pos_q)
 
 
-def get_pareto(G, s, r, t):
+def get_pareto(G, s, r, t, costs, benefits):
     """
     :param G: Graph
     :param s: Source node
     :param r: Approximate Ratios
     :param t: Thresholds on costs
+    :param costs: All costs
+    :param benefits: All benefits
     :return: Pi
     """
     n = len(G)
     Pi = defaultdict(lambda: defaultdict(dict))
-    Pi[s][0][0] = (None, tuple([0, 0]), tuple([0, 0]), None, None)
+    Pi[0][s][0] = (G.nodes[s]['Label'], tuple([0, 0]), tuple([0, 0]), None, None)
     for i in range(1, n):
         for v in G.nodes:
-            # print(f"Before: {Pi[v][i]}")
-            Pi[v][i] = copy.deepcopy(Pi[v][i - 1])
-            # print(f"After: {Pi[v][i]}")
+            Pi[i][v] = copy.deepcopy(Pi[i - 1][v])
             for u in G.predecessors(v):
-                print(f"v: {v}, u: {u}, i: {i}")
-                Pi[v][i] = extend_and_merge(Pi[v][i], Pi[u][i - 1], G[u][v], r, t)
+                logging.info(f"v: {v}, u: {u}, i: {i}")
+                Pi[i][v] = extend_and_merge(Pi, G, u, v, i, r, t, costs, benefits)
 
-    return Pi
+    return Pi[n-1]
 
 
-def extend_and_merge(R, Q, e, r, t):
-    print(f"Q: {Q}")
+def extend_and_merge(Pi, G, u, v, i, r, t, costs, benefits):
+    R = Pi[i][v]
+    Q = Pi[i - 1][u]
+    e = G[u][v]
+    # logging.info(f"Q: {Q}")
     for p in Q.values():
-        # print(f"p: {p}")
-        if p[0] is None:
-            q = ([e['Type']],
-                 tuple(p_c + e_c for p_c, e_c in zip(p[1], e['c'])),
-                 tuple(p_b + e_b for p_b, e_b in zip(p[2], e['b'])),
-                 p, e)
-        else:
-            print(f"e: {e}")
-            q = (p[0].append(e['Type']),
-                 tuple(p_c + e_c for p_c, e_c in zip(p[1], e['c'])),
-                 tuple(p_b + e_b for p_b, e_b in zip(p[2], e['b'])),
-                 p, e)
-        print(f"q: {q}")
+        # logging.info(f"p: {p}")
+        # logging.info(f"e: {e}")
+        q = (G.nodes[v]['Label'],
+             tuple(p_c + e_c for p_c, e_c in zip(p[1], e['c'])),
+             tuple(p_b + e_b for p_b, e_b in zip(p[2], e['b'])),
+             p, e)
+        # logging.info(f"q: {q}")
         # Guarantee cost under threshold
         if any(x > y for x, y in zip(q[1], t)):
-            print("True")
             continue
-        pos_q = pos(q, r)
-        # print(f"pos_q: {pos_q}")
-        if pos_q not in R or R[pos_q][2][0] < q[2][0]:
+        pos_q = pos(q, r, costs, benefits)
+        pos_q = str(pos_q)
+        if pos_q not in R.keys() or R[pos_q][2][0] < q[2][0]:
             R[pos_q] = q
-    print(f"R: {R}")
+    # logging.info(f"R: {R}")
     return R
 
 
-all_costs, all_benefits = costs_benefits(G)
-c_min = np.min(all_costs, axis=0)
-b_max = np.max(all_benefits, axis=0)
+def main():
+    r = [0.2, 0.3, 0.2, 0.3]
+    t = [1000, 1000]
 
-pareto_set = get_pareto(G, 0, r, t)
+    costs, benefits = costs_benefits(G)
 
-pareto_set
+    pareto_set = get_pareto(G, 0, r, t, costs, benefits)
+
+    pareto_dict = dict(pareto_set)
+    pareto_json = json.dumps(pareto_dict, indent=4)
+
+    with open(dataset + 'pareto.json', 'w') as json_file:
+        json_file.write(pareto_json)
+
+
+if __name__ == '__main__':
+    main()
