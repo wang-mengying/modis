@@ -2,13 +2,20 @@ import copy
 import json
 import logging
 import math
+import sys
+import time
+
+import joblib
 import numpy as np
 import networkx as nx
 import pandas as pd
 from collections import defaultdict
 
-dataset = "../Example/small/t_cluster/"
-logging.basicConfig(filename=dataset+'log_ssmosp.txt', level=logging.INFO, format='%(message)s')
+sys.path.append("../")
+import Dataset.Movie.others.movie_objectives as movie_objectives
+
+dataset = "../Dataset/Movie/others/d7m8/"
+logging.basicConfig(filename=dataset + 'log_ssmosp.txt', level=logging.INFO, format='%(message)s')
 nodes_df = pd.read_csv(dataset + 'nodes.csv')
 edges_df = pd.read_csv(dataset + 'edges.csv')
 
@@ -17,23 +24,50 @@ G = nx.from_pandas_edgelist(edges_df, 'Source', 'Target', edge_attr=['Type', 'Va
 labels_dict = nodes_df.set_index('Id')['Label'].to_dict()
 nx.set_node_attributes(G, labels_dict, 'Label')
 
-
-def cal_costs_benefits(source_id, target_id):
-    # TODO replace with objectives
-    cost_1 = np.random.randint(1, source_id + 10)
-    cost_2 = np.random.randint(1, target_id + 10)
-    benefit_1 = np.random.randint(1, source_id + 10)
-    benefit_2 = np.random.randint(1, target_id + 10)
-    return [cost_1, cost_2], [benefit_1, benefit_2]
+inference_count = 0
 
 
-def costs_benefits(G):
+def increment_count():
+    # Declare 'count' as a global variable
+    global inference_count
+    inference_count += 1
+    print(inference_count)
+
+
+def get_costs_benefits(node_id, model, cluster_file='../Dataset/Movie/others/movie_clustered_table.csv'):
+    node = G.nodes[node_id]
+    df = movie_objectives.surrogate_inputs(node, cluster_file)
+    model_objectives = model.predict(df)[0]
+    increment_count()
+    feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+
+    return model_objectives, feature_objectives
+
+
+def cal_costs_benefits(source_id, target_id, model):
+    sm_objs, sf_objs = get_costs_benefits(source_id, model)
+    tm_objs, tf_objs = get_costs_benefits(target_id, model)
+
+    time = tm_objs[0] - sm_objs[0]
+    accuracy = tm_objs[1] - sm_objs[1]
+    complexity = tm_objs[2] - sm_objs[2]
+    fisher = tf_objs[0] - sf_objs[0]
+    mutual_info = tf_objs[1] - sf_objs[1]
+    vif = tf_objs[2] - sf_objs[2]
+
+    costs = [vif, time, complexity]
+    benefits = [fisher, mutual_info, accuracy]
+
+    return costs, benefits
+
+
+def costs_benefits(G, model):
     all_costs = []
     all_benefits = []
     for u, v, l in G.edges(data=True):
         source_id = u
         target_id = v
-        c, b = cal_costs_benefits(source_id, target_id)
+        c, b = cal_costs_benefits(source_id, target_id, model)
         l['c'] = c
         l['b'] = b
         all_costs.append(c)
@@ -74,10 +108,10 @@ def get_pareto(G, s, r, t, costs, benefits):
         for v in G.nodes:
             Pi[i][v] = copy.deepcopy(Pi[i - 1][v])
             for u in G.predecessors(v):
-                logging.info(f"v: {v}, u: {u}, i: {i}")
+                # logging.info(f"v: {v}, u: {u}, i: {i}")
                 Pi[i][v] = extend_and_merge(Pi, G, u, v, i, r, t, costs, benefits)
 
-    return Pi[n-1]
+    return Pi[n - 1]
 
 
 def extend_and_merge(Pi, G, u, v, i, r, t, costs, benefits):
@@ -98,19 +132,31 @@ def extend_and_merge(Pi, G, u, v, i, r, t, costs, benefits):
             continue
         pos_q = pos(q, r, costs, benefits)
         pos_q = str(pos_q)
-        if pos_q not in R.keys() or R[pos_q][2][0] < q[2][0]:
+        if pos_q not in R.keys() or R[pos_q][2][-1] < q[2][-1]:
             R[pos_q] = q
     # logging.info(f"R: {R}")
     return R
 
 
 def main():
-    r = [0.2, 0.3, 0.2, 0.3]
-    t = [1000, 1000]
+    r = [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 1]
+    t = [5, 1.5, 555]
 
-    costs, benefits = costs_benefits(G)
+    model_path = '../Surrogate/Movie/movie_surrogate.joblib'
+    model = joblib.load(model_path)
 
+    logging.info("Calculating costs and benefits...")
+    start = time.time()
+    costs, benefits = costs_benefits(G, model)
+    end = time.time()
+    logging.info(f"Cost/Benefit Calculation Time: {end - start}")
+    logging.info(f"Inference Times: {inference_count}")
+
+    logging.info("Getting pareto set...")
+    start = time.time()
     pareto_set = get_pareto(G, 0, r, t, costs, benefits)
+    end = time.time()
+    logging.info(f"Search Time: {end - start}")
 
     pareto_dict = dict(pareto_set)
     pareto_json = json.dumps(pareto_dict, indent=4)

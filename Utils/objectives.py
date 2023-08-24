@@ -2,44 +2,36 @@ import numpy as np
 import pandas as pd
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
+from statsmodels.tools.tools import add_constant
 
 
 # Fisher Score
-def multi_class_fisher_score(X, y):
-    # Number of classes
-    num_classes = len(np.unique(y))
+def fisher_score(X, y):
+    classes = np.unique(y)
+    c = len(classes)
+    m, n = X.shape
 
-    # Mean of the entire feature
-    m = np.mean(X)
+    overall_mean = np.mean(X, axis=0)
 
-    # Class probabilities, means, and variances
-    p = np.zeros(num_classes)
-    m_k = np.zeros(num_classes)
-    var_k = np.zeros(num_classes)
+    S_b = np.zeros(n)
+    S_w = np.zeros(n)
 
-    for k in range(num_classes):
-        X_k = X[y == k]
-        p[k] = len(X_k) / len(X)
-        m_k[k] = np.mean(X_k)
-        var_k[k] = np.var(X_k)
+    for cls in classes:
+        X_c = X[y == cls]
 
-    # Fisher score
-    between_class_variance = np.sum(p * (m_k - m) ** 2)
-    within_class_variance = np.sum(p * var_k)
-    fisher_score = between_class_variance / within_class_variance
+        n_i = X_c.shape[0]
+        mean_c = np.mean(X_c, axis=0)
 
-    return fisher_score
+        S_b += n_i * (mean_c - overall_mean) ** 2
+        S_w += n_i * np.var(X_c, axis=0)
 
+    fisher_scores = S_b / (S_w + 1e-10)
 
-def mean_fisher(X, y):
-    fisher_scores = {column: multi_class_fisher_score(X[column], y) for column in X.columns}
-    fisher_scores_df = pd.DataFrame.from_dict(fisher_scores, orient='index', columns=['Fisher Score'])
-
-    return fisher_scores_df['Fisher Score'].mean()
+    return fisher_scores.mean()
 
 
 # Mutual Information
-def mean_mi(X, y, regression=True):
+def mutual_info(X, y, regression=True):
     if regression:
         mutual_info = mutual_info_regression(X, y)
     else:
@@ -50,13 +42,17 @@ def mean_mi(X, y, regression=True):
     return mutual_info_df['Mutual Information'].mean()
 
 
-# Variance Inflation Factor (VIF)
-def mean_vif(X):
-    vif = pd.DataFrame()
-    vif['index'] = X.columns
-    vif['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+def vif(X):
+    # Add a constant to the data
+    data_with_const = add_constant(X)
 
-    return vif["VIF"].mean()
+    vif_data = [variance_inflation_factor(data_with_const.values, i)
+                for i in range(data_with_const.shape[1])]
+
+    vif_data = vif_data[1:]
+    mean_vif = np.mean(vif_data)
+
+    return mean_vif
 
 
 # Bayesian information criterion (BIC)
