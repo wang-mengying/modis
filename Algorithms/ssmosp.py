@@ -25,7 +25,6 @@ G = nx.from_pandas_edgelist(edges_df, 'Source', 'Target', edge_attr=['Type', 'Va
 labels_dict = nodes_df.set_index('Id')['Label'].to_dict()
 nx.set_node_attributes(G, labels_dict, 'Label')
 
-
 surrogate_model = None
 
 
@@ -40,27 +39,33 @@ def get_objectives(node_id, model, cluster_file='../Dataset/Movie/others/movie_c
     model_objectives = model.predict(df)[0]
     feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
 
-    return model_objectives, feature_objectives
+    return list(model_objectives), feature_objectives
 
 
 def node_obj_map(node_id):
-    mobjs, fobjs = get_objectives(node_id, surrogate_model)
-    G.nodes[node_id]['model_objectives'] = mobjs
-    G.nodes[node_id]['feature_objectives'] = fobjs
     print(node_id)
+    return node_id, get_objectives(node_id, surrogate_model)
 
 
 def nodes_objectives(G, model_path):
     nodes = list(G.nodes())
 
     with Pool(cpu_count(), initializer=worker_initializer, initargs=(model_path,)) as pool:
-        pool.map(node_obj_map, nodes)
+        results = pool.map(node_obj_map, nodes)
+
+    model_objectives = {node_id: model_objectives for node_id, (model_objectives, _) in results}
+    feature_objectives = {node_id: feature_objectives for node_id, (_, feature_objectives) in results}
+    nx.set_node_attributes(G, model_objectives, 'model_objectives')
+    nx.set_node_attributes(G, feature_objectives, 'feature_objectives')
 
 
-def cal_costs_benefits(edge):
+def cal_costs_benefits(args):
+    edge, node_data = args
+    print(edge)
     u, v = edge
-    sm_objs, sf_objs = G.nodes[u]['model_objectives'], G.nodes[u]['feature_objectives']
-    tm_objs, tf_objs = G.nodes[v]['model_objectives'], G.nodes[v]['feature_objectives']
+
+    sm_objs, sf_objs = node_data[u]['model_objectives'], node_data[u]['feature_objectives']
+    tm_objs, tf_objs = node_data[v]['model_objectives'], node_data[v]['feature_objectives']
 
     time = tm_objs[0] - sm_objs[0]
     accuracy = tm_objs[1] - sm_objs[1]
@@ -69,25 +74,24 @@ def cal_costs_benefits(edge):
     mutual_info = tf_objs[1] - sf_objs[1]
     vif = tf_objs[2] - sf_objs[2]
 
-    G[u][v]["c"] = [vif, time, complexity]
-    G[u][v]["b"] = [fisher, mutual_info, accuracy]
+    costs = [vif, time, complexity]
+    benefits = [fisher, mutual_info, accuracy]
 
-    print(edge)
-
-    return G[u][v]["c"], G[u][v]["b"]
+    return u, v, costs, benefits
 
 
 def costs_benefits(G):
     edges = [(u, v) for u, v, _ in G.edges(data=True)]
+    node_data = {node: G.nodes[node] for node in G.nodes()}
 
-    # Use a Pool to parallelize the computation with initializer to set up the model
     with Pool(cpu_count()) as pool:
-        results = pool.map(cal_costs_benefits, edges)
+        results = pool.map(cal_costs_benefits, [(edge, node_data) for edge in edges])
 
-    # Update the graph with computed costs and benefits and aggregate results
     all_costs = []
     all_benefits = []
-    for c, b in results:
+    for u, v, c, b in results:
+        G[u][v]['c'] = c
+        G[u][v]['b'] = b
         all_costs.append(c)
         all_benefits.append(b)
 
@@ -166,10 +170,12 @@ def main():
     start = time.time()
     logging.info("Nodes objectives...")
     nodes_objectives(G, model_path)
+    nx.write_gpickle(G, dataset + 'costs.gpickle')
     logging.info("Edges costs/benefits...")
     costs, benefits = costs_benefits(G)
     end = time.time()
     logging.info(f"Cost/Benefit Calculation Time: {end - start}")
+    nx.write_gpickle(G, dataset + 'costs.gpickle')
 
     logging.info("Getting pareto set...")
     start = time.time()
