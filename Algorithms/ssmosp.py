@@ -6,7 +6,6 @@ import sys
 import time
 
 import joblib
-import numpy as np
 import networkx as nx
 import pandas as pd
 from collections import defaultdict
@@ -87,57 +86,66 @@ def costs_benefits(G):
     with Pool(cpu_count()) as pool:
         results = pool.map(cal_costs_benefits, [(edge, node_data) for edge in edges])
 
-    all_costs = []
-    all_benefits = []
     for u, v, c, b in results:
         G[u][v]['c'] = c
         G[u][v]['b'] = b
-        all_costs.append(c)
-        all_benefits.append(b)
 
-    return all_costs, all_benefits
+def get_cmin_bmax(G):
+    model_objectives_mins = [min(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
+    feature_objectives_mins = [min(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(3)]
+
+    model_objectives_maxs = [max(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
+    feature_objectives_maxs = [max(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(3)]
+
+    c_min = [feature_objectives_mins[2], model_objectives_mins[0], model_objectives_mins[2]]
+    b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1]]
+
+    return c_min, b_max
 
 
-def pos(q: tuple, r: list, all_costs, all_benefits):
+def pos(q: tuple, r: list, c_min, b_max):
     pos_q = []
-    c_min = np.min(all_costs, axis=0)
-    b_max = np.max(all_benefits, axis=0)
 
     # Costs
     for i in range(len(q[1])):
         pos_q.append(math.floor(math.log(q[1][i] / c_min[i], r[i])))
 
     # Benefits
-    for i in range(len(q[2])):
+    for i in range(len(q[2])-1):
         pos_q.append(math.floor(math.log(q[2][i] / b_max[i], r[i + len(q[1])])))
 
     return tuple(pos_q)
 
 
-def get_pareto(G, s, r, t, costs, benefits):
+def get_pareto(G, s, r, t, c_min, b_max):
     """
     :param G: Graph
     :param s: Source node
     :param r: Approximate Ratios
     :param t: Thresholds on costs
-    :param costs: All costs
-    :param benefits: All benefits
+    :param c_min: Minimum costs
+    :param b_max: Maximum benefits
     :return: Pi
     """
     n = len(G)
     Pi = defaultdict(lambda: defaultdict(dict))
-    Pi[0][s][0] = (G.nodes[s]['Label'], tuple([0, 0]), tuple([0, 0]), None, None)
-    for i in range(1, n):
+    c = [G.nodes[s]['feature_objectives'][2], G.nodes[s]['model_objectives'][0], G.nodes[s]['model_objectives'][2]]
+    b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1]]
+    pos_s = pos((None, tuple(c), tuple(b), None, None), r, c_min, b_max)
+    Pi[0][s][str(pos_s)] = (G.nodes[s]['Label'], tuple(c), tuple(b), None, None)
+    max_l = math.floor(n*0.01)
+    for i in range(1, max_l):
+        print(i)
         for v in G.nodes:
-            Pi[i][v] = copy.deepcopy(Pi[i - 1][v])
+            Pi[i][v] = copy.deepcopy(Pi[i-1][v])
             for u in G.predecessors(v):
                 # logging.info(f"v: {v}, u: {u}, i: {i}")
-                Pi[i][v] = extend_and_merge(Pi, G, u, v, i, r, t, costs, benefits)
+                Pi[i][v] = extend_and_merge(Pi, G, u, v, i, r, t, c_min, b_max)
 
-    return Pi[n - 1]
+    return Pi[max_l-1]
 
 
-def extend_and_merge(Pi, G, u, v, i, r, t, costs, benefits):
+def extend_and_merge(Pi, G, u, v, i, r, t, c_min, b_max):
     R = Pi[i][v]
     Q = Pi[i - 1][u]
     e = G[u][v]
@@ -153,7 +161,7 @@ def extend_and_merge(Pi, G, u, v, i, r, t, costs, benefits):
         # Guarantee cost under threshold
         if any(x > y for x, y in zip(q[1], t)):
             continue
-        pos_q = pos(q, r, costs, benefits)
+        pos_q = pos(q, r, c_min, b_max)
         pos_q = str(pos_q)
         if pos_q not in R.keys() or R[pos_q][2][-1] < q[2][-1]:
             R[pos_q] = q
@@ -162,7 +170,7 @@ def extend_and_merge(Pi, G, u, v, i, r, t, costs, benefits):
 
 
 def main():
-    r = [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 1]
+    r = [1.2, 1.2, 1.2, 0.8, 0.8, 1]
     t = [5, 1.5, 555]
 
     model_path = '../Surrogate/Movie/movie_surrogate.joblib'
@@ -170,22 +178,29 @@ def main():
     start = time.time()
     logging.info("Nodes objectives...")
     nodes_objectives(G, model_path)
-    nx.write_gpickle(G, dataset + 'costs.gpickle')
+    nx.write_gpickle(G, dataset + 'objectives.gpickle')
     logging.info("Edges costs/benefits...")
-    costs, benefits = costs_benefits(G)
+    costs_benefits(G)
     end = time.time()
     logging.info(f"Cost/Benefit Calculation Time: {end - start}")
     nx.write_gpickle(G, dataset + 'costs.gpickle')
 
+    # G = nx.read_gpickle(dataset + 'costs.gpickle')
+    c_min, b_max = get_cmin_bmax(G)
+    logging.info(f"c_min: {c_min}, b_max: {b_max}")
     logging.info("Getting pareto set...")
     start = time.time()
-    pareto_set = get_pareto(G, 0, r, t, costs, benefits)
+    pareto_set = get_pareto(G, 0, r, t, c_min, b_max)
     end = time.time()
     logging.info(f"Search Time: {end - start}")
 
+    # with open(dataset + 'pareto.json', "r") as file:
+    #     pareto_dict = json.load(file)
     pareto_dict = dict(pareto_set)
-    pareto_json = json.dumps(pareto_dict, indent=4)
+    pareto_size = sum(len(value.keys()) for value in pareto_dict.values())
+    logging.info(f"Pareto Set Size: {pareto_size}")
 
+    pareto_json = json.dumps(pareto_dict, indent=4)
     with open(dataset + 'pareto.json', 'w') as json_file:
         json_file.write(pareto_json)
 
