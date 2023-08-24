@@ -7,7 +7,6 @@ import numpy as np
 sys.path.append("../")
 import Utils.sample_nodes as sample
 import Utils.objectives as objectives
-import Trainer.movie_gradient_boosting as mgb
 
 
 def count_cluster(file_path):

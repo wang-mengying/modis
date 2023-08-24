@@ -10,6 +10,7 @@ import numpy as np
 import networkx as nx
 import pandas as pd
 from collections import defaultdict
+from multiprocessing import Pool, cpu_count
 
 sys.path.append("../")
 import Dataset.Movie.others.movie_objectives as movie_objectives
@@ -24,29 +25,42 @@ G = nx.from_pandas_edgelist(edges_df, 'Source', 'Target', edge_attr=['Type', 'Va
 labels_dict = nodes_df.set_index('Id')['Label'].to_dict()
 nx.set_node_attributes(G, labels_dict, 'Label')
 
-inference_count = 0
+
+surrogate_model = None
 
 
-def increment_count():
-    # Declare 'count' as a global variable
-    global inference_count
-    inference_count += 1
-    print(inference_count)
+def worker_initializer(model_path):
+    global surrogate_model
+    surrogate_model = joblib.load(model_path)
 
 
-def get_costs_benefits(node_id, model, cluster_file='../Dataset/Movie/others/movie_clustered_table.csv'):
+def get_objectives(node_id, model, cluster_file='../Dataset/Movie/others/movie_clustered_table.csv'):
     node = G.nodes[node_id]
     df = movie_objectives.surrogate_inputs(node, cluster_file)
     model_objectives = model.predict(df)[0]
-    increment_count()
     feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
 
     return model_objectives, feature_objectives
 
 
-def cal_costs_benefits(source_id, target_id, model):
-    sm_objs, sf_objs = get_costs_benefits(source_id, model)
-    tm_objs, tf_objs = get_costs_benefits(target_id, model)
+def node_obj_map(node_id):
+    mobjs, fobjs = get_objectives(node_id, surrogate_model)
+    G.nodes[node_id]['model_objectives'] = mobjs
+    G.nodes[node_id]['feature_objectives'] = fobjs
+    print(node_id)
+
+
+def nodes_objectives(G, model_path):
+    nodes = list(G.nodes())
+
+    with Pool(cpu_count(), initializer=worker_initializer, initargs=(model_path,)) as pool:
+        pool.map(node_obj_map, nodes)
+
+
+def cal_costs_benefits(edge):
+    u, v = edge
+    sm_objs, sf_objs = G.nodes[u]['model_objectives'], G.nodes[u]['feature_objectives']
+    tm_objs, tf_objs = G.nodes[v]['model_objectives'], G.nodes[v]['feature_objectives']
 
     time = tm_objs[0] - sm_objs[0]
     accuracy = tm_objs[1] - sm_objs[1]
@@ -55,23 +69,28 @@ def cal_costs_benefits(source_id, target_id, model):
     mutual_info = tf_objs[1] - sf_objs[1]
     vif = tf_objs[2] - sf_objs[2]
 
-    costs = [vif, time, complexity]
-    benefits = [fisher, mutual_info, accuracy]
+    G[u][v]["c"] = [vif, time, complexity]
+    G[u][v]["b"] = [fisher, mutual_info, accuracy]
 
-    return costs, benefits
+    print(edge)
+
+    return G[u][v]["c"], G[u][v]["b"]
 
 
-def costs_benefits(G, model):
+def costs_benefits(G):
+    edges = [(u, v) for u, v, _ in G.edges(data=True)]
+
+    # Use a Pool to parallelize the computation with initializer to set up the model
+    with Pool(cpu_count()) as pool:
+        results = pool.map(cal_costs_benefits, edges)
+
+    # Update the graph with computed costs and benefits and aggregate results
     all_costs = []
     all_benefits = []
-    for u, v, l in G.edges(data=True):
-        source_id = u
-        target_id = v
-        c, b = cal_costs_benefits(source_id, target_id, model)
-        l['c'] = c
-        l['b'] = b
+    for c, b in results:
         all_costs.append(c)
         all_benefits.append(b)
+
     return all_costs, all_benefits
 
 
@@ -143,14 +162,14 @@ def main():
     t = [5, 1.5, 555]
 
     model_path = '../Surrogate/Movie/movie_surrogate.joblib'
-    model = joblib.load(model_path)
 
-    logging.info("Calculating costs and benefits...")
     start = time.time()
-    costs, benefits = costs_benefits(G, model)
+    logging.info("Nodes objectives...")
+    nodes_objectives(G, model_path)
+    logging.info("Edges costs/benefits...")
+    costs, benefits = costs_benefits(G)
     end = time.time()
     logging.info(f"Cost/Benefit Calculation Time: {end - start}")
-    logging.info(f"Inference Times: {inference_count}")
 
     logging.info("Getting pareto set...")
     start = time.time()
