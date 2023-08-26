@@ -204,6 +204,13 @@ def main():
     with open(dataset + 'pareto.json', 'w') as json_file:
         json_file.write(pareto_json)
 
+    # Save nodes' data
+    # G = nx.read_gpickle(dataset + 'costs.gpickle')
+    node_data = {node: G.nodes[node] for node in G.nodes()}
+    node_json = json.dumps(node_data, indent=4)
+    with open(dataset + 'nodes.json', 'w') as json_file:
+        json_file.write(node_json)
+
 
 if __name__ == '__main__':
     main()

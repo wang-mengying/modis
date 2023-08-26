@@ -71,7 +71,7 @@ def train_model(df_sample, original_file, clustered_file):
         training_time, accuracy, complexity = mgb.train_and_evaluate_model(df)
 
         df_sample.loc[i, 'accuracy'] = accuracy
-        df_sample.loc[i, 'complexity'] = complexity
+        df_sample.loc[i, 'complexity'] = complexity/df_sample.loc[i, 'active_items']
         df_sample.loc[i, 'training_time'] = training_time
 
     return df_sample
