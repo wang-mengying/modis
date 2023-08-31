@@ -4,6 +4,7 @@ import logging
 import math
 import sys
 import time
+import pickle
 
 import joblib
 import networkx as nx
@@ -134,7 +135,7 @@ def get_pareto(G, s, r, t, c_min, b_max):
     pos_s = pos((None, tuple(c), tuple(b), None, None), r, c_min, b_max)
     Pi[0][s][str(pos_s)] = (G.nodes[s]['Label'], tuple(c), tuple(b), None, None)
     max_l = math.floor(n*0.01)
-
+    max_l = 100
     for i in range(1, max_l):
         print(i)
         for v in G.nodes:
@@ -188,19 +189,20 @@ def main():
     r = [1.2, 1.2, 1.2, 0.8, 0.8, 1]
     t = [5, 1.5, 555]
 
-    model_path = '../Surrogate/Movie/movie_surrogate.joblib'
+    # model_path = '../Surrogate/Movie/movie_surrogate.joblib'
+    #
+    # start = time.time()
+    # logging.info("Nodes objectives...")
+    # nodes_objectives(G, model_path)
+    # nx.write_gpickle(G, dataset + 'objectives.gpickle')
+    # logging.info("Edges costs/benefits...")
+    # costs_benefits(G)
+    # end = time.time()
+    # logging.info(f"Cost/Benefit Calculation Time: {end - start}")
+    # nx.write_gpickle(G, dataset + 'costs.gpickle')
 
-    start = time.time()
-    logging.info("Nodes objectives...")
-    nodes_objectives(G, model_path)
-    nx.write_gpickle(G, dataset + 'objectives.gpickle')
-    logging.info("Edges costs/benefits...")
-    costs_benefits(G)
-    end = time.time()
-    logging.info(f"Cost/Benefit Calculation Time: {end - start}")
-    nx.write_gpickle(G, dataset + 'costs.gpickle')
-
-    # G = nx.read_gpickle(dataset + 'costs.gpickle')
+    with open(dataset+'costs.gpickle', 'rb') as f:
+        G = pickle.load(f)
     c_min, b_max = get_cmin_bmax(G)
     logging.info(f"c_min: {c_min}, b_max: {b_max}")
     logging.info("Getting pareto set...")
@@ -213,7 +215,7 @@ def main():
     #     pareto_dict = json.load(file)
     pareto_dict = dict(pareto_set)
     pareto_json = json.dumps(pareto_dict, indent=4)
-    with open(dataset + 'pareto_node.json', 'w') as json_file:
+    with open(dataset + 'pareto_node_100.json', 'w') as json_file:
         json_file.write(pareto_json)
 
     pareto = {}
@@ -224,19 +226,19 @@ def main():
                 continue
             pareto[pos] = path
     pareto_json = json.dumps(pareto, indent=4)
-    with open(dataset + 'pareto.json', 'w') as json_file:
+    with open(dataset + 'pareto_100.json', 'w') as json_file:
         json_file.write(pareto_json)
 
     # pareto_size = sum(len(value.keys()) for value in pareto_dict.values())
     pareto_size = len(pareto)
     logging.info(f"Pareto Set Size: {pareto_size}")
 
-    # Save nodes' data
-    # G = nx.read_gpickle(dataset + 'costs.gpickle')
-    node_data = {node: G.nodes[node] for node in G.nodes()}
-    node_json = json.dumps(node_data, indent=4)
-    with open(dataset + 'nodes.json', 'w') as json_file:
-        json_file.write(node_json)
+    # # Save nodes' data
+    # # G = nx.read_gpickle(dataset + 'costs.gpickle')
+    # node_data = {node: G.nodes[node] for node in G.nodes()}
+    # node_json = json.dumps(node_data, indent=4)
+    # with open(dataset + 'nodes.json', 'w') as json_file:
+    #     json_file.write(node_json)
 
 
 if __name__ == '__main__':
