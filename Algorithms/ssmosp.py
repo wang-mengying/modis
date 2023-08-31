@@ -134,6 +134,7 @@ def get_pareto(G, s, r, t, c_min, b_max):
     pos_s = pos((None, tuple(c), tuple(b), None, None), r, c_min, b_max)
     Pi[0][s][str(pos_s)] = (G.nodes[s]['Label'], tuple(c), tuple(b), None, None)
     max_l = math.floor(n*0.01)
+
     for i in range(1, max_l):
         print(i)
         for v in G.nodes:
@@ -141,12 +142,10 @@ def get_pareto(G, s, r, t, c_min, b_max):
             for u in G.predecessors(v):
                 # logging.info(f"v: {v}, u: {u}, i: {i}")
                 Pi[i][v] = extend_and_merge(Pi, G, u, v, i, r, t, c_min, b_max)
-
     return Pi[max_l-1]
 
 
 def extend_and_merge(Pi, G, u, v, i, r, t, c_min, b_max):
-    R = Pi[i][v]
     Q = Pi[i - 1][u]
     e = G[u][v]
     # logging.info(f"Q: {Q}")
@@ -163,10 +162,26 @@ def extend_and_merge(Pi, G, u, v, i, r, t, c_min, b_max):
             continue
         pos_q = pos(q, r, c_min, b_max)
         pos_q = str(pos_q)
-        if pos_q not in R.keys() or R[pos_q][2][-1] < q[2][-1]:
-            R[pos_q] = q
+        Pi[i] = merge(Pi[i], v, pos_q, q)
+        # if pos_q not in Pi[i][v].keys() or Pi[i][v][pos_q][2][-1] < q[2][-1]:
+        #     Pi[i][v][pos_q] = q
     # logging.info(f"R: {R}")
-    return R
+    return Pi[i][v]
+
+
+def merge(D, node, pos_q, path):
+    skip = False
+    nodes = [k for k, v in D.items() if v != {}]
+    for n in nodes:
+        if pos_q in D[n].keys():
+            if D[n][pos_q][2][-1] >= path[2][-1]:
+                skip = True
+                continue
+            del D[n][pos_q]
+    if not skip:
+        D[node][pos_q] = path
+
+    return D
 
 
 def main():
@@ -194,15 +209,27 @@ def main():
     end = time.time()
     logging.info(f"Search Time: {end - start}")
 
-    # with open(dataset + 'pareto.json', "r") as file:
+    # with open(dataset + 'pareto_old.json', "r") as file:
     #     pareto_dict = json.load(file)
     pareto_dict = dict(pareto_set)
-    pareto_size = sum(len(value.keys()) for value in pareto_dict.values())
-    logging.info(f"Pareto Set Size: {pareto_size}")
-
     pareto_json = json.dumps(pareto_dict, indent=4)
+    with open(dataset + 'pareto_node.json', 'w') as json_file:
+        json_file.write(pareto_json)
+
+    pareto = {}
+    nodes = [k for k, v in pareto_dict.items() if v != {}]
+    for node in nodes:
+        for pos, path in pareto_dict[node].items():
+            if pos in pareto.keys() and pareto[pos][2][-1] >= path[2][-1]:
+                continue
+            pareto[pos] = path
+    pareto_json = json.dumps(pareto, indent=4)
     with open(dataset + 'pareto.json', 'w') as json_file:
         json_file.write(pareto_json)
+
+    # pareto_size = sum(len(value.keys()) for value in pareto_dict.values())
+    pareto_size = len(pareto)
+    logging.info(f"Pareto Set Size: {pareto_size}")
 
     # Save nodes' data
     # G = nx.read_gpickle(dataset + 'costs.gpickle')
