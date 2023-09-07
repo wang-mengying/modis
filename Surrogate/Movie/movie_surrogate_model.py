@@ -1,3 +1,6 @@
+import logging
+import time
+
 from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.ensemble import GradientBoostingRegressor
@@ -6,6 +9,8 @@ import pandas as pd
 import numpy as np
 import joblib
 
+dataset = "../../Dataset/Movie/others/d7m8/"
+logging.basicConfig(filename=dataset + 'log_ssmosp.txt', level=logging.INFO, format='%(message)s')
 
 # Transform 'Label' into separate binary feature columns
 def transform_label(row):
@@ -44,11 +49,11 @@ def train_pred(X, y, model_path="movie_surrogate.joblib"):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     # Multi-output Gradient Boosting model
-    model = MultiOutputRegressor(GradientBoostingRegressor(random_state=42))
-    model.fit(X_train, y_train)
-
-    joblib.dump(model, model_path)
-    # model = joblib.load(model_path)
+    # model = MultiOutputRegressor(GradientBoostingRegressor(random_state=42))
+    # model.fit(X_train, y_train)
+    #
+    # joblib.dump(model, model_path)
+    model = joblib.load(model_path)
 
     y_pred = model.predict(X_test)
 
@@ -66,10 +71,13 @@ def train_pred(X, y, model_path="movie_surrogate.joblib"):
 
 
 def main():
+    start = time.time()
     data = pd.read_csv('sample_nodes.csv')
 
     X, y = get_X_y(data)
     metrics = train_pred(X, y)
+    end = time.time()
+    logging.info(f'Total Oracle time: {end - start} s.')
 
     for key, value in metrics.items():
         print(f"{key}: {value}")

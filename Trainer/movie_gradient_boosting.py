@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 import numpy as np
 import time
@@ -7,6 +9,9 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import accuracy_score
 import category_encoders as ce
 from sklearn.preprocessing import MultiLabelBinarizer
+
+dataset = "../Dataset/Movie/others/d7m8/"
+logging.basicConfig(filename=dataset + 'log_ssmosp.txt', level=logging.INFO, format='%(message)s')
 
 
 # Handle cases where a column does not exist in df
@@ -76,7 +81,7 @@ def multi_label_binarization(df, column):
 
 
 def train_and_evaluate_model(df):
-    #TODO: return a dictionary, complexity = nodes/active_features
+    # TODO: return a dictionary, complexity = nodes/active_features
     df = df.fillna(df.mean())
     df = df.dropna()
 
@@ -98,6 +103,7 @@ def train_and_evaluate_model(df):
 
 
 def main():
+    start = time.time()
     dataset_path = "../Dataset/Movie/"
     filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
     path = dataset_path + filename
@@ -108,6 +114,8 @@ def main():
 
     df = preprocess_data(df)
     training_time, accuracy, complexity = train_and_evaluate_model(df)
+    end = time.time()
+    logging.info(f'Total Retrain time: {end - start} s.')
 
     print(f'Accuracy: {accuracy}.')
     print(f'Complexity: {complexity}.')

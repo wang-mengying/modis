@@ -10,13 +10,13 @@ import joblib
 import networkx as nx
 import pandas as pd
 from collections import defaultdict
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool
 
 sys.path.append("../")
 import Dataset.Movie.others.movie_objectives as movie_objectives
 
 dataset = "../Dataset/Movie/others/d7m8/"
-logging.basicConfig(filename=dataset + 'log_ssmosp.txt', level=logging.INFO, format='%(message)s')
+logging.basicConfig(filename=dataset + 'si_direct/log_ssmosp.txt', level=logging.INFO, format='%(message)s')
 nodes_df = pd.read_csv(dataset + 'nodes.csv')
 edges_df = pd.read_csv(dataset + 'edges.csv')
 
@@ -50,7 +50,9 @@ def node_obj_map(node_id):
 def nodes_objectives(G, model_path):
     nodes = list(G.nodes())
 
-    with Pool(cpu_count(), initializer=worker_initializer, initargs=(model_path,)) as pool:
+    num_workers = 8
+    logging.info(f"Number of workers to calculate node objectives: {num_workers}")
+    with Pool(num_workers, initializer=worker_initializer, initargs=(model_path,)) as pool:
         results = pool.map(node_obj_map, nodes)
 
     model_objectives = {node_id: model_objectives for node_id, (model_objectives, _) in results}
@@ -84,7 +86,9 @@ def costs_benefits(G):
     edges = [(u, v) for u, v, _ in G.edges(data=True)]
     node_data = {node: G.nodes[node] for node in G.nodes()}
 
-    with Pool(cpu_count()) as pool:
+    num_workers = 8
+    logging.info(f"Number of workers to calculate edge costs/benefits: {num_workers}")
+    with Pool(num_workers) as pool:
         results = pool.map(cal_costs_benefits, [(edge, node_data) for edge in edges])
 
     for u, v, c, b in results:
@@ -135,7 +139,7 @@ def get_pareto(G, s, r, t, c_min, b_max):
     pos_s = pos((None, tuple(c), tuple(b), None, None), r, c_min, b_max)
     Pi[0][s][str(pos_s)] = (G.nodes[s]['Label'], tuple(c), tuple(b), None, None)
     max_l = math.floor(n*0.01)
-    max_l = 100
+    max_l = 50
     for i in range(1, max_l):
         print(i)
         for v in G.nodes:
@@ -186,23 +190,25 @@ def merge(D, node, pos_q, path):
 
 
 def main():
-    r = [1.2, 1.2, 1.2, 0.8, 0.8, 1]
+    # r = [1.2, 1.2, 1.2, 0.8, 0.8, 1]\
+    epsilon = 0.1
+    logging.info(f"epsilon: {epsilon}")
+    r = [1+ epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1]
     t = [5, 1.5, 555]
 
-    # model_path = '../Surrogate/Movie/movie_surrogate.joblib'
-    #
-    # start = time.time()
-    # logging.info("Nodes objectives...")
-    # nodes_objectives(G, model_path)
-    # nx.write_gpickle(G, dataset + 'objectives.gpickle')
-    # logging.info("Edges costs/benefits...")
-    # costs_benefits(G)
-    # end = time.time()
-    # logging.info(f"Cost/Benefit Calculation Time: {end - start}")
-    # nx.write_gpickle(G, dataset + 'costs.gpickle')
+    model_path = '../Surrogate/Movie/movie_surrogate.joblib'
 
-    with open(dataset+'costs.gpickle', 'rb') as f:
-        G = pickle.load(f)
+    start = time.time()
+    logging.info("Nodes objectives...")
+    nodes_objectives(G, model_path)
+    pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
+    logging.info("Edges costs/benefits...")
+    costs_benefits(G)
+    end = time.time()
+    logging.info(f"Cost/Benefit Calculation Time: {end - start}")
+    pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
+
+    # G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
     c_min, b_max = get_cmin_bmax(G)
     logging.info(f"c_min: {c_min}, b_max: {b_max}")
     logging.info("Getting pareto set...")
@@ -215,7 +221,7 @@ def main():
     #     pareto_dict = json.load(file)
     pareto_dict = dict(pareto_set)
     pareto_json = json.dumps(pareto_dict, indent=4)
-    with open(dataset + 'pareto_node_100.json', 'w') as json_file:
+    with open(dataset + 'si_direct/pareto_node_test.json', 'w') as json_file:
         json_file.write(pareto_json)
 
     pareto = {}
@@ -226,19 +232,19 @@ def main():
                 continue
             pareto[pos] = path
     pareto_json = json.dumps(pareto, indent=4)
-    with open(dataset + 'pareto_100.json', 'w') as json_file:
+    with open(dataset + 'si_direct/pareto_test.json', 'w') as json_file:
         json_file.write(pareto_json)
 
     # pareto_size = sum(len(value.keys()) for value in pareto_dict.values())
     pareto_size = len(pareto)
     logging.info(f"Pareto Set Size: {pareto_size}")
 
-    # # Save nodes' data
-    # # G = nx.read_gpickle(dataset + 'costs.gpickle')
-    # node_data = {node: G.nodes[node] for node in G.nodes()}
-    # node_json = json.dumps(node_data, indent=4)
-    # with open(dataset + 'nodes.json', 'w') as json_file:
-    #     json_file.write(node_json)
+    # Save nodes' data
+    # G = nx.read_gpickle(dataset + 'costs.gpickle')
+    node_data = {node: G.nodes[node] for node in G.nodes()}
+    node_json = json.dumps(node_data, indent=4)
+    with open(dataset + 'nodes.json', 'w') as json_file:
+        json_file.write(node_json)
 
 
 if __name__ == '__main__':
