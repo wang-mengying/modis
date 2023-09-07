@@ -3,9 +3,15 @@ import json
 import logging
 import math
 import pickle
+import sys
 import time
 
+import joblib
+
 from Algorithms.si_direct import get_cmin_bmax
+
+sys.path.append("../")
+import Dataset.Movie.others.movie_objectives as movie_objectives
 
 dataset = "../Dataset/Movie/others/d7m8/"
 logging.basicConfig(filename=dataset + 'bi_direct/log_bi.txt', level=logging.INFO, format='%(message)s')
@@ -17,13 +23,31 @@ def cal_box(path, epsilon, c_min, b_max):
 
     # Costs
     for i in range(len(path["costs"])):
-        box.append(math.floor(math.log(path["costs"][i] / c_min[i], 1 + epsilon[i])))
+        box.append(0) if path["costs"][i] == 0 else \
+            box.append(math.floor(math.log(path["costs"][i] / c_min[i], 1 + epsilon[i])))
 
     # Benefits
     for i in range(len(path["benefits"])):
-        box.append(math.floor(math.log(path["benefits"][i] / b_max[i], 1 - epsilon[i + len(path["costs"])])))
+        box.append(0) if path["benefits"][i] == 0 else \
+            box.append(math.floor(math.log(path["benefits"][i] / b_max[i], 1 - epsilon[i + len(path["costs"])])))
 
     return tuple(box)
+
+
+def costs_benefits(state, model_path='../Surrogate/Movie/movie_surrogate.joblib',
+                   cluster_file='../Dataset/Movie/others/movie_clustered_table.csv'):
+    node = {}
+    node['Label'] = str(state)
+    df = movie_objectives.surrogate_inputs(node, cluster_file)
+
+    model = joblib.load(model_path)
+    model_objectives = list(model.predict(df)[0])
+    feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+
+    costs = [feature_objectives[2], model_objectives[0], model_objectives[2]]
+    benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1]]
+
+    return [costs, benefits]
 
 
 # Check is path p2 dominates path p1
@@ -106,6 +130,55 @@ def spawn(G, path, epsilon, c_min, b_max, direction="F"):
     return extend_paths
 
 
+def spawn_state(state, direction="F"):
+    columns, rows = state
+    neighbors = []
+
+    # Helper function to ensure at least one "1" is present in the tuple
+    def ensure_one_present(tpl):
+        return 1 in tpl
+
+    # columns tuple
+    for i in range(len(columns)):
+        if (direction == "F" and columns[i] == 1) or (direction == "B" and columns[i] == 0):
+            new_columns = list(columns)
+            new_columns[i] = 1 - columns[i]
+            new_state = (tuple(new_columns), rows)
+
+            if ensure_one_present(new_state[0]) and not ensure_one_present(new_state[1]):
+                new_rows = list(rows)
+                new_rows[0] = 1
+                new_state = (tuple(new_columns), tuple(new_rows))
+            if ensure_one_present(new_state[1]) and not ensure_one_present(new_state[0]):
+                new_columns = list(columns)
+                new_columns[0] = 1
+                new_state = (tuple(new_columns), rows)
+
+            if ensure_one_present(new_state[0]) and ensure_one_present(new_state[1]):
+                neighbors.append(new_state)
+
+    # rows tuple
+    for i in range(len(rows)):
+        if (direction == "F" and rows[i] == 1) or (direction == "B" and rows[i] == 0):
+            new_rows = list(rows)
+            new_rows[i] = 1 - rows[i]
+            new_state = (columns, tuple(new_rows))
+
+            if ensure_one_present(new_state[1]) and not ensure_one_present(new_state[0]):
+                new_columns = list(columns)
+                new_columns[0] = 1
+                new_state = (tuple(new_columns), tuple(new_rows))
+            if ensure_one_present(new_state[0]) and not ensure_one_present(new_state[1]):
+                new_rows = list(rows)
+                new_rows[0] = 1
+                new_state = (columns, tuple(new_rows))
+
+            if ensure_one_present(new_state[0]) and ensure_one_present(new_state[1]):
+                neighbors.append(new_state)
+
+    return neighbors
+
+
 def bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max):
     sandwich_bounds = set()
     prun_set = set()
@@ -134,12 +207,13 @@ def bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b
                 if box in prun_set:
                     continue
 
-                dominated = False
-                for sb in sandwich_bounds:
-                    if is_dominated(box, sb[1], new_path, pareto_set.get(sb[1], None), epsilon):
-                        dominated = True
+                prun = False
+                for bound in sandwich_bounds:
+                    if is_dominated(box, bound[1], new_path, pareto_set.get(bound[1], None), epsilon) and \
+                            is_dominated(bound[0], box, pareto_set.get(bound[0], None), new_path, epsilon):
+                        prun = True
                         break
-                if not dominated:
+                if not prun:
                     pareto_set, added, prun_set = update_pareto(pareto_set, box, new_path, epsilon, prun_set)
                     if added:
                         new_pathsF[box] = new_path
@@ -155,15 +229,16 @@ def bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b
                 if box in prun_set:
                     continue
 
-                dominated = False
-                for sb in sandwich_bounds:
-                    if is_dominated(box, sb[0], new_path, pareto_set.get(sb[0], None), epsilon):
-                        dominated = True
+                prun = False
+                for bound in sandwich_bounds:
+                    if is_dominated(box, bound[1], new_path, pareto_set.get(bound[1], None), epsilon) and \
+                            is_dominated(bound[0], box, pareto_set.get(bound[0], None), new_path, epsilon):
+                        prun = True
                         break
-                if not dominated:
+                if not prun:
                     pareto_set, added, prun_set = update_pareto(pareto_set, box, new_path, epsilon, prun_set)
                     if added:
-                        new_pathsF[box] = new_path
+                        new_pathsB[box] = new_path
 
         # Terminate if the two searches meet
         if visitedF & visitedB:
@@ -172,8 +247,99 @@ def bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b
         # Update sandwich bounds based on the updated Pareto set
         for boxF, pathF in new_pathsF.items():
             for boxB, pathB in new_pathsB.items():
-                if is_dominated(boxF, boxB, pathF, pathB, epsilon) or is_dominated(boxB, boxF, pathB, pathF, epsilon):
+                if is_dominated(boxF, boxB, pathF, pathB, epsilon) and boxF[-1] == boxB[-1]:
                     sandwich_bounds.add((boxF, boxB))
+                elif is_dominated(boxB, boxF, pathB, pathF, epsilon) and boxB[-1] == boxF[-1]:
+                    sandwich_bounds.add((boxB, boxF))
+
+        pathsF = new_pathsF
+        pathsB = new_pathsB
+
+    return pareto_set
+
+
+def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max):
+    pareto_set = {}
+    sandwich_bounds = set()
+    prun_set = set()
+
+    fs_path = {'nodes': [start_state],
+               'costs': costs_benefits(start_state)[0],
+               'benefits': costs_benefits(start_state)[1]}
+    bs_path = {'nodes': [end_state],
+               'costs': 0,
+               'benefits': 0}
+
+    pathsF = {str(cal_box(fs_path, epsilon, c_min, b_max)): fs_path}
+    pathsB = {str((0, 0, 0, 0, 0, 0)): bs_path}
+
+    while pathsF or pathsB:
+        new_pathsF = {}
+        new_pathsB = {}
+
+        # Forward exploration
+        print(f"pathsF: {len(pathsF)}")
+        for boxF, pathF in pathsF.items():
+            current_state = pathF['nodes'][-1]
+            print(current_state)
+
+            next_states = spawn_state(current_state, direction="F")
+            for next_state in next_states:
+                new_path = {'nodes': pathF['nodes'] + [next_state],
+                            'costs': costs_benefits(next_state)[0],
+                            'benefits': costs_benefits(next_state)[1]}
+                box = str(cal_box(new_path, epsilon, c_min, b_max))
+                if box in prun_set:
+                    continue
+
+                prun = False
+                for bound in sandwich_bounds:
+                    if is_dominated(box, bound[1], new_path, pareto_set.get(bound[1], None), epsilon) and \
+                            is_dominated(bound[0], box, pareto_set.get(bound[0], None), new_path, epsilon):
+                        prun = True
+                        break
+                if not prun:
+                    pareto_set, added, prun_set = update_pareto(pareto_set, box, new_path, epsilon, prun_set)
+                    if added:
+                        new_pathsF[box] = new_path
+
+        # Backward exploration
+        print(f"pathsB: {len(pathsB)}")
+        for boxB, pathB in pathsB.items():
+            current_state = pathB['nodes'][-1]
+            print(current_state)
+
+            next_states = spawn_state(current_state, direction="B")
+            for next_state in next_states:
+                new_path = {'nodes': pathB['nodes'] + [next_state],
+                            'costs': costs_benefits(next_state)[0],
+                            'benefits': costs_benefits(next_state)[1]}
+                box = str(cal_box(new_path, epsilon, c_min, b_max))
+                if box in prun_set:
+                    continue
+
+                prun = False
+                for bound in sandwich_bounds:
+                    if is_dominated(box, bound[1], new_path, pareto_set.get(bound[1], None), epsilon) and \
+                            is_dominated(bound[0], box, pareto_set.get(bound[0], None), new_path, epsilon):
+                        prun = True
+                        break
+                if not prun:
+                    pareto_set, added, prun_set = update_pareto(pareto_set, box, new_path, epsilon, prun_set)
+                    if added:
+                        new_pathsB[box] = new_path
+
+        # Termination condition
+        if set(pathF['nodes'][-1] for pathF in pathsF.values()) & set(pathB['nodes'][-1] for pathB in pathsB.values()):
+            break
+
+        # Update sandwich bounds
+        for boxF, pathF in new_pathsF.items():
+            for boxB, pathB in new_pathsB.items():
+                if is_dominated(boxF, boxB, pathF, pathB, epsilon) and boxF[-1] == boxB[-1]:
+                    sandwich_bounds.add((boxF, boxB))
+                elif is_dominated(boxB, boxF, pathB, pathF, epsilon) and boxB[-1] == boxF[-1]:
+                    sandwich_bounds.add((boxB, boxF))
 
         pathsF = new_pathsF
         pathsB = new_pathsB
@@ -186,12 +352,14 @@ def main():
 
     start_node = 0
     end_node = 37653
-    epsilon = [0.1] * 5 + [0.0001]
+    epsilon = [0.2] * 5 + [0.0001]
     c_min, b_max = get_cmin_bmax(G)
     pareto_set = {}
 
     start_time = time.time()
-    pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
+    # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
+    pareto = bi_directional_search_state((tuple([1] * 11), tuple([1] * 11)),
+                                         (tuple([0] * 11), tuple([0] * 11)), epsilon, c_min, b_max)
     end_time = time.time()
     logging.info(f"epsilon: {epsilon}")
     logging.info(f"Search time: {end_time - start_time}")

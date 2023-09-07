@@ -1,0 +1,12 @@
+epsilon: [0.5, 0.5, 0.5, 0.5, 0.5, 0.0001]
+Search time: 0.08628606796264648
+Pareto set size: 1
+epsilon: [0.4, 0.4, 0.4, 0.4, 0.4, 0.0001]
+Search time: 0.0944669246673584
+Pareto set size: 5
+epsilon: [0.4, 0.4, 0.4, 0.4, 0.4, 0.0001]
+Search time: 0.07355022430419922
+Pareto set size: 5
+epsilon: [0.2, 0.2, 0.2, 0.2, 0.2, 0.0001]
+Search time: 0.3802332878112793
+Pareto set size: 16
