@@ -16,3 +16,7 @@ Pareto set size: 31
 epsilon: [0.5, 0.5, 0.5, 0.5, 0.5, 0.0001]
 Search time: 232.17108821868896
 Pareto set size: 13
+epsilon: [0.5, 0.5, 0.5, 0.5, 0.5, 0.0001]
+max_length: 20
+Search time: 123.34320592880249
+Pareto set size: 3

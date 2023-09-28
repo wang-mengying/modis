@@ -4,6 +4,7 @@ import numpy as np
 
 sys.path.append("../")
 import Trainer.movie_gradient_boosting as mgb
+import Dataset.Movie.others.movie_objectives as movie_objectives
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -50,12 +51,17 @@ def process_data(node_label, original_file, clustered_file):
     return df
 
 
-def train_model(df_sample, original_file, clustered_file):
+def cal_objectives(df_sample, original_file, clustered_file):
     df_sample['num_rows'] = 0
     df_sample['num_cols'] = 0
+
     df_sample['accuracy'] = 0.0
     df_sample['complexity'] = 0.0
     df_sample['training_time'] = 0.0
+
+    df_sample['fisher'] = 0.0
+    df_sample['mutual_info'] = 0.0
+    df_sample['vif'] = 0.0
 
     for i, row in df_sample.iterrows():
         node_id = row['Id']
@@ -69,10 +75,14 @@ def train_model(df_sample, original_file, clustered_file):
 
         df = mgb.preprocess_data(df)
         training_time, accuracy, complexity = mgb.train_and_evaluate_model(df)
+        fisher, mutual_info, vif = movie_objectives.feature_objectives(row, clustered_file)
 
         df_sample.loc[i, 'accuracy'] = accuracy
         df_sample.loc[i, 'complexity'] = complexity/df_sample.loc[i, 'active_items']
         df_sample.loc[i, 'training_time'] = training_time
+        df_sample.loc[i, 'fisher'] = fisher
+        df_sample.loc[i, 'mutual_info'] = mutual_info
+        df_sample.loc[i, 'vif'] = vif
 
     return df_sample
 
@@ -87,7 +97,7 @@ def main():
     sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
 
     print("Start training ......")
-    sample = train_model(sample, dataset + 'processed/movie_filtered.csv',
+    sample =cal_objectives(sample, dataset + 'processed/movie_filtered.csv',
                          dataset + 'others/movie_clustered_table.csv')
 
     sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
