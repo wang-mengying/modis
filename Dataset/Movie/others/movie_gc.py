@@ -1,6 +1,8 @@
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
+import numpy as np
+from scipy.stats import spearmanr
 
 
 def active_counts(label_str):
@@ -20,7 +22,10 @@ nodes[['fisher', 'mutual_info', 'vif']] = pd.DataFrame(feature['feature_objectiv
 
 
 objectives = ['active_items', 'active_clusters', 'time', 'accuracy', 'complexity', 'fisher', 'mutual_info', 'vif']
-correlation_matrix = nodes[objectives].corr()
+# correlation_matrix = nodes[objectives].corr()
+correlation_matrix, _ = spearmanr(nodes[objectives])
+correlation_matrix = pd.DataFrame(correlation_matrix)
+
 
 G = nx.Graph()
 for objective in objectives:

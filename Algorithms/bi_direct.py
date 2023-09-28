@@ -61,7 +61,9 @@ def is_dominated(b1, b2, p1, p2, epsilon):
 
     # Case 2: Different boxes, compare the box
     for i in range(len(b1)):
-        if b2[i] > (1 + epsilon[i]) * b1[i]:
+        # if b2[i] > (1 + epsilon[i]) * b1[i]:
+        # we already consider epsilon in the box calculation
+        if b2[i] > b1[i]:
             return False
 
     return True
@@ -145,15 +147,17 @@ def spawn_state(state, direction="F"):
             new_columns[i] = 1 - columns[i]
             new_state = (tuple(new_columns), rows)
 
+            # If the new state has no "1" in the columns tuple, add a "1" to the columns tuple
             if ensure_one_present(new_state[0]) and not ensure_one_present(new_state[1]):
                 new_rows = list(rows)
                 new_rows[0] = 1
                 new_state = (tuple(new_columns), tuple(new_rows))
+            # If the new state has no "1" in the rows tuple, add a "1" to the rows tuple
             if ensure_one_present(new_state[1]) and not ensure_one_present(new_state[0]):
                 new_columns = list(columns)
                 new_columns[0] = 1
                 new_state = (tuple(new_columns), rows)
-
+            # If the new state has "1" in both the columns and rows tuple, add it to the neighbors
             if ensure_one_present(new_state[0]) and ensure_one_present(new_state[1]):
                 neighbors.append(new_state)
 
@@ -164,15 +168,17 @@ def spawn_state(state, direction="F"):
             new_rows[i] = 1 - rows[i]
             new_state = (columns, tuple(new_rows))
 
+            # If the new state has no "1" in the columns tuple, add a "1" to the columns tuple
             if ensure_one_present(new_state[1]) and not ensure_one_present(new_state[0]):
                 new_columns = list(columns)
                 new_columns[0] = 1
                 new_state = (tuple(new_columns), tuple(new_rows))
+            # If the new state has no "1" in the rows tuple, add a "1" to the rows tuple
             if ensure_one_present(new_state[0]) and not ensure_one_present(new_state[1]):
                 new_rows = list(rows)
                 new_rows[0] = 1
                 new_state = (columns, tuple(new_rows))
-
+            # If the new state has "1" in both the columns and rows tuple, add it to the neighbors
             if ensure_one_present(new_state[0]) and ensure_one_present(new_state[1]):
                 neighbors.append(new_state)
 
@@ -209,6 +215,7 @@ def bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b
 
                 prun = False
                 for bound in sandwich_bounds:
+                    # check if the new box is dominated by the upper bound and dominates the lower bound
                     if is_dominated(box, bound[1], new_path, pareto_set.get(bound[1], None), epsilon) and \
                             is_dominated(bound[0], box, pareto_set.get(bound[0], None), new_path, epsilon):
                         prun = True
@@ -231,6 +238,7 @@ def bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b
 
                 prun = False
                 for bound in sandwich_bounds:
+                    # check if the new box is dominated by the upper bound and dominates the lower bound
                     if is_dominated(box, bound[1], new_path, pareto_set.get(bound[1], None), epsilon) and \
                             is_dominated(bound[0], box, pareto_set.get(bound[0], None), new_path, epsilon):
                         prun = True
@@ -258,7 +266,7 @@ def bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b
     return pareto_set
 
 
-def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max):
+def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length=20):
     pareto_set = {}
     sandwich_bounds = set()
     prun_set = set()
@@ -280,6 +288,9 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max):
         # Forward exploration
         print(f"pathsF: {len(pathsF)}")
         for boxF, pathF in pathsF.items():
+            if len(pathF['nodes']) > max_length/2:
+                continue
+
             current_state = pathF['nodes'][-1]
             print(current_state)
 
@@ -306,6 +317,9 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max):
         # Backward exploration
         print(f"pathsB: {len(pathsB)}")
         for boxB, pathB in pathsB.items():
+            if len(pathB['nodes']) > max_length/2:
+                continue
+
             current_state = pathB['nodes'][-1]
             print(current_state)
 
@@ -336,6 +350,7 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max):
         # Update sandwich bounds
         for boxF, pathF in new_pathsF.items():
             for boxB, pathB in new_pathsB.items():
+                # check the last element of the box to ensure them in the same layer on the most important objective
                 if is_dominated(boxF, boxB, pathF, pathB, epsilon) and boxF[-1] == boxB[-1]:
                     sandwich_bounds.add((boxF, boxB))
                 elif is_dominated(boxB, boxF, pathB, pathF, epsilon) and boxB[-1] == boxF[-1]:
@@ -352,16 +367,19 @@ def main():
 
     start_node = 0
     end_node = 37653
-    epsilon = [0.2] * 5 + [0.0001]
+    max_length = 20
+    epsilon = [0.5] * 5 + [0.0001]
     c_min, b_max = get_cmin_bmax(G)
     pareto_set = {}
 
     start_time = time.time()
     # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
     pareto = bi_directional_search_state((tuple([1] * 11), tuple([1] * 11)),
-                                         (tuple([0] * 11), tuple([0] * 11)), epsilon, c_min, b_max)
+                                         (tuple([0] * 11), tuple([0] * 11)), epsilon, c_min, b_max, max_length)
     end_time = time.time()
+
     logging.info(f"epsilon: {epsilon}")
+    logging.info(f"max_length: {max_length}")
     logging.info(f"Search time: {end_time - start_time}")
     logging.info(f"Pareto set size: {len(pareto)}")
     pareto_json = json.dumps(pareto, indent=4)
