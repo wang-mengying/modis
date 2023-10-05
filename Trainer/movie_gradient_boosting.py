@@ -10,9 +10,6 @@ from sklearn.metrics import accuracy_score
 import category_encoders as ce
 from sklearn.preprocessing import MultiLabelBinarizer
 
-dataset = "../Dataset/Movie/others/d7m8/"
-logging.basicConfig(filename=dataset + 'log_ssmosp.txt', level=logging.INFO, format='%(message)s')
-
 
 # Handle cases where a column does not exist in df
 def get_column(df, column):
@@ -59,9 +56,9 @@ def preprocess_data(df):
             df = multi_label_binarization(df, column)
 
     # Group 'worldwide_gross' and trans it into a classification problem
-    bins = [0, 50000000, 150000000, np.inf]
-    labels = ['Low', 'Medium', 'High']
-    df['gross_class'] = pd.cut(df['worldwide_gross'], bins=bins, labels=labels)
+    # bins = [0, 50000000, 150000000, np.inf]
+    # labels = ['Low', 'Medium', 'High']
+    # df['gross_class'] = pd.cut(df['worldwide_gross'], bins=bins, labels=labels)
 
     return df
 
@@ -105,7 +102,8 @@ def train_and_evaluate_model(df):
 def main():
     start = time.time()
     dataset_path = "../Dataset/Movie/"
-    filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
+    # filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
+    filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/h2o.csv'
     path = dataset_path + filename
     df = pd.read_csv(path)
 

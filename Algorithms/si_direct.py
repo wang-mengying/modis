@@ -15,8 +15,8 @@ from multiprocessing import Pool
 sys.path.append("../")
 import Dataset.Movie.others.movie_objectives as movie_objectives
 
-dataset = "../Dataset/Movie/others/d7m8/"
-logging.basicConfig(filename=dataset + 'si_direct/log_ssmosp.txt', level=logging.INFO, format='%(message)s')
+dataset = "../Dataset/Movie/results/ml2/"
+logging.basicConfig(filename='../Dataset/Movie/log.txt', level=logging.INFO, format='%(message)s')
 nodes_df = pd.read_csv(dataset + 'nodes.csv')
 edges_df = pd.read_csv(dataset + 'edges.csv')
 
@@ -95,6 +95,7 @@ def costs_benefits(G):
         G[u][v]['c'] = c
         G[u][v]['b'] = b
 
+
 def get_cmin_bmax(G):
     model_objectives_mins = [min(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
     feature_objectives_mins = [min(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(3)]
@@ -122,7 +123,7 @@ def pos(q: tuple, r: list, c_min, b_max):
     return tuple(pos_q)
 
 
-def get_pareto(G, s, r, t, c_min, b_max):
+def get_pareto(G, s, r, t, c_min, b_max, max_l=5):
     """
     :param G: Graph
     :param s: Source node
@@ -132,15 +133,14 @@ def get_pareto(G, s, r, t, c_min, b_max):
     :param b_max: Maximum benefits
     :return: Pi
     """
-    n = len(G)
+    # n = len(G)
     Pi = defaultdict(lambda: defaultdict(dict))
     c = [G.nodes[s]['feature_objectives'][2], G.nodes[s]['model_objectives'][0], G.nodes[s]['model_objectives'][2]]
     b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1]]
     pos_s = pos((None, tuple(c), tuple(b), None, None), r, c_min, b_max)
     Pi[0][s][str(pos_s)] = (G.nodes[s]['Label'], tuple(c), tuple(b), None, None)
-    max_l = math.floor(n*0.01)
-    max_l = 50
-    for i in range(1, max_l):
+    # max_l = math.floor(n*0.01)
+    for i in range(1, max_l+1):
         print(i)
         for v in G.nodes:
             Pi[i][v] = copy.deepcopy(Pi[i-1][v])
@@ -167,6 +167,7 @@ def extend_and_merge(Pi, G, u, v, i, r, t, c_min, b_max):
             continue
         pos_q = pos(q, r, c_min, b_max)
         pos_q = str(pos_q)
+        G.nodes[v]['pos'] = pos_q
         Pi[i] = merge(Pi[i], v, pos_q, q)
         # if pos_q not in Pi[i][v].keys() or Pi[i][v][pos_q][2][-1] < q[2][-1]:
         #     Pi[i][v][pos_q] = q
@@ -190,8 +191,7 @@ def merge(D, node, pos_q, path):
 
 
 def main():
-    # r = [1.2, 1.2, 1.2, 0.8, 0.8, 1]\
-    epsilon = 0.1
+    epsilon = 0.5
     logging.info(f"epsilon: {epsilon}")
     r = [1+ epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1]
     t = [5, 1.5, 555]
@@ -213,16 +213,16 @@ def main():
     logging.info(f"c_min: {c_min}, b_max: {b_max}")
     logging.info("Getting pareto set...")
     start = time.time()
-    pareto_set = get_pareto(G, 0, r, t, c_min, b_max)
+    pareto_set = get_pareto(G, 0, r, t, c_min, b_max, 2)
     end = time.time()
     logging.info(f"Search Time: {end - start}")
 
     # with open(dataset + 'pareto_old.json', "r") as file:
     #     pareto_dict = json.load(file)
     pareto_dict = dict(pareto_set)
-    pareto_json = json.dumps(pareto_dict, indent=4)
-    with open(dataset + 'si_direct/pareto_node_test.json', 'w') as json_file:
-        json_file.write(pareto_json)
+    # pareto_json = json.dumps(pareto_dict, indent=4)
+    # with open(dataset + 'si_pareto_' + str(epsilon) + '.json', 'w') as json_file:
+    #     json_file.write(pareto_json)
 
     pareto = {}
     nodes = [k for k, v in pareto_dict.items() if v != {}]
@@ -232,7 +232,7 @@ def main():
                 continue
             pareto[pos] = path
     pareto_json = json.dumps(pareto, indent=4)
-    with open(dataset + 'si_direct/pareto_test.json', 'w') as json_file:
+    with open(dataset + 'apx' + str(epsilon) + '.json', 'w') as json_file:
         json_file.write(pareto_json)
 
     # pareto_size = sum(len(value.keys()) for value in pareto_dict.values())
