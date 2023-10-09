@@ -16,8 +16,9 @@ sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
 Data = "../Dataset/Kaggle/"
+max_length = 5
 
-dataset = Data + "results/ml5/"
+dataset = Data + "results/ml/" + str(5)
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 nodes_df = pd.read_csv(dataset + 'nodes.csv')
 edges_df = pd.read_csv(dataset + 'edges.csv')
@@ -124,7 +125,7 @@ def pos(q: tuple, r: list, c_min, b_max):
     return tuple(pos_q)
 
 
-def get_pareto(G, s, r, t, c_min, b_max):
+def get_pareto(G, s, r, t, c_min, b_max, max_length):
     """
     :param G: Graph
     :param s: Source node
@@ -140,15 +141,14 @@ def get_pareto(G, s, r, t, c_min, b_max):
     b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1]]
     pos_s = pos((None, tuple(c), tuple(b), None, None), r, c_min, b_max)
     Pi[0][s][str(pos_s)] = (G.nodes[s]['Label'], tuple(c), tuple(b), None, None)
-    max = min(n, 1000)
-    for i in range(1, max+1):
+    for i in range(1, max_length+1):
         print(i)
         for v in G.nodes:
             Pi[i][v] = copy.deepcopy(Pi[i-1][v])
             for u in G.predecessors(v):
                 # logging.info(f"v: {v}, u: {u}, i: {i}")
                 Pi[i][v] = extend_and_merge(Pi, G, u, v, i, r, t, c_min, b_max)
-    return Pi[max]
+    return Pi[max_length]
 
 
 def extend_and_merge(Pi, G, u, v, i, r, t, c_min, b_max):
@@ -214,7 +214,7 @@ def main():
     # logging.info(f"c_min: {c_min}, b_max: {b_max}")
     logging.info("Getting pareto set...")
     start = time.time()
-    pareto_set = get_pareto(G, 0, r, t, c_min, b_max)
+    pareto_set = get_pareto(G, 0, r, t, c_min, b_max, max_length)
     end = time.time()
     logging.info(f"ApxMODis Search Time: {end - start}")
 
