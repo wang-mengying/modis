@@ -13,14 +13,15 @@ from collections import defaultdict
 from multiprocessing import Pool
 
 sys.path.append("../")
-import Dataset.Movie.others.movie_objectives as movie_objectives
+import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
-dataset = "../Dataset/Movie/results/ml2/"
-logging.basicConfig(filename='../Dataset/Movie/log.txt', level=logging.INFO, format='%(message)s')
+Data = "../Dataset/Kaggle/"
+
+dataset = Data + "results/ml5/"
+logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 nodes_df = pd.read_csv(dataset + 'nodes.csv')
 edges_df = pd.read_csv(dataset + 'edges.csv')
 
-# Construct graph
 G = nx.from_pandas_edgelist(edges_df, 'Source', 'Target', edge_attr=['Type', 'Values'], create_using=nx.DiGraph())
 labels_dict = nodes_df.set_index('Id')['Label'].to_dict()
 nx.set_node_attributes(G, labels_dict, 'Label')
@@ -33,7 +34,7 @@ def worker_initializer(model_path):
     surrogate_model = joblib.load(model_path)
 
 
-def get_objectives(node_id, model, cluster_file='../Dataset/Movie/others/movie_clustered_table.csv'):
+def get_objectives(node_id, model, cluster_file=Data+'others/movie_clustered_table.csv'):
     node = G.nodes[node_id]
     df = movie_objectives.surrogate_inputs(node, cluster_file)
     model_objectives = model.predict(df)[0]
@@ -123,7 +124,7 @@ def pos(q: tuple, r: list, c_min, b_max):
     return tuple(pos_q)
 
 
-def get_pareto(G, s, r, t, c_min, b_max, max_l=5):
+def get_pareto(G, s, r, t, c_min, b_max):
     """
     :param G: Graph
     :param s: Source node
@@ -133,21 +134,21 @@ def get_pareto(G, s, r, t, c_min, b_max, max_l=5):
     :param b_max: Maximum benefits
     :return: Pi
     """
-    # n = len(G)
+    n = len(G)
     Pi = defaultdict(lambda: defaultdict(dict))
     c = [G.nodes[s]['feature_objectives'][2], G.nodes[s]['model_objectives'][0], G.nodes[s]['model_objectives'][2]]
     b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1]]
     pos_s = pos((None, tuple(c), tuple(b), None, None), r, c_min, b_max)
     Pi[0][s][str(pos_s)] = (G.nodes[s]['Label'], tuple(c), tuple(b), None, None)
-    # max_l = math.floor(n*0.01)
-    for i in range(1, max_l+1):
+    max = min(n, 1000)
+    for i in range(1, max+1):
         print(i)
         for v in G.nodes:
             Pi[i][v] = copy.deepcopy(Pi[i-1][v])
             for u in G.predecessors(v):
                 # logging.info(f"v: {v}, u: {u}, i: {i}")
                 Pi[i][v] = extend_and_merge(Pi, G, u, v, i, r, t, c_min, b_max)
-    return Pi[max_l-1]
+    return Pi[max]
 
 
 def extend_and_merge(Pi, G, u, v, i, r, t, c_min, b_max):
@@ -193,29 +194,29 @@ def merge(D, node, pos_q, path):
 def main():
     epsilon = 0.5
     logging.info(f"epsilon: {epsilon}")
-    r = [1+ epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1]
+    r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1]
     t = [5, 1.5, 555]
 
-    model_path = '../Surrogate/Movie/movie_surrogate.joblib'
+    # model_path = '../Surrogate/Movie/movie_surrogate.joblib'.replace("/", "\\")
+    #
+    # start = time.time()
+    # logging.info("Nodes objectives...")
+    # nodes_objectives(G, model_path)
+    # pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
+    # logging.info("Edges costs/benefits...")
+    # costs_benefits(G)
+    # end = time.time()
+    # logging.info(f"Cost/Benefit Calculation Time: {end - start}")
+    # pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
 
-    start = time.time()
-    logging.info("Nodes objectives...")
-    nodes_objectives(G, model_path)
-    pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
-    logging.info("Edges costs/benefits...")
-    costs_benefits(G)
-    end = time.time()
-    logging.info(f"Cost/Benefit Calculation Time: {end - start}")
-    pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
-
-    # G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
+    G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
     c_min, b_max = get_cmin_bmax(G)
-    logging.info(f"c_min: {c_min}, b_max: {b_max}")
+    # logging.info(f"c_min: {c_min}, b_max: {b_max}")
     logging.info("Getting pareto set...")
     start = time.time()
-    pareto_set = get_pareto(G, 0, r, t, c_min, b_max, 2)
+    pareto_set = get_pareto(G, 0, r, t, c_min, b_max)
     end = time.time()
-    logging.info(f"Search Time: {end - start}")
+    logging.info(f"ApxMODis Search Time: {end - start}")
 
     # with open(dataset + 'pareto_old.json', "r") as file:
     #     pareto_dict = json.load(file)

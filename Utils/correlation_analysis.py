@@ -45,7 +45,7 @@ def gat_relations(json_file, threshold=0.8):
 
 
 def main():
-    json_file = '../Dataset/Movie/others/d7m8/nodes.json'
+    json_file = '../Dataset/Kaggle/others/d7m8/nodes.json'
 
     strong_relations = gat_relations(json_file)
     print(strong_relations)

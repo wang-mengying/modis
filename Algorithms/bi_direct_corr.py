@@ -12,10 +12,10 @@ import joblib
 from Algorithms.si_direct import get_cmin_bmax
 
 sys.path.append("../")
-import Dataset.Movie.others.movie_objectives as movie_objectives
+import Dataset.Kaggle.others.movie_objectives as movie_objectives
 import Utils.correlation_analysis as correlation_analysis
 
-dataset = "../Dataset/Movie/others/d7m8/"
+dataset = "../Dataset/Kaggle/others/d7m8/"
 logging.basicConfig(filename=dataset + 'bi_direct/log_bi.txt', level=logging.INFO, format='%(message)s')
 records = pd.read_csv('../Surrogate/Movie/sample_nodes.csv')
 relations = correlation_analysis.gat_relations(dataset + 'nodes.json')
@@ -38,8 +38,8 @@ def cal_box(path, epsilon, c_min, b_max):
     return tuple(box)
 
 
-def costs_benefits(state, model_path='../Surrogate/Movie/movie_surrogate.joblib',
-                   cluster_file='../Dataset/Movie/others/movie_clustered_table.csv'):
+def costs_benefits(state, model_path='../Surrogate/Kaggle/movie_surrogate.joblib',
+                   cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
     node = {}
     node['Label'] = str(state)
     df = movie_objectives.surrogate_inputs(node, cluster_file)
@@ -54,7 +54,7 @@ def costs_benefits(state, model_path='../Surrogate/Movie/movie_surrogate.joblib'
     return [costs, benefits]
 
 
-def costs_benefits_part(state, cluster_file='../Dataset/Movie/others/movie_clustered_table.csv'):
+def costs_benefits_part(state, cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
     node = {}
     node['Label'] = str(state)
 

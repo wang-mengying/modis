@@ -5,7 +5,7 @@ import math
 
 # L = [2, 3]
 L = [5, 5, 5, 5, 8]
-# dataset = "../Dataset/Movie/others/"
+# dataset = "../Dataset/Kaggle/others/"
 #
 # with open(dataset + "cluster_k.json", 'r') as json_file:
 #     data = json.load(json_file)

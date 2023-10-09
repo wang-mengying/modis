@@ -9,6 +9,7 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import accuracy_score
 import category_encoders as ce
 from sklearn.preprocessing import MultiLabelBinarizer
+import Utils.objectives as objectives
 
 
 # Handle cases where a column does not exist in df
@@ -30,6 +31,11 @@ def preprocess_data(df):
     if director_deathYear is not None:
         df['director_deathYear'] = director_deathYear.replace('alive', '2023')
         df['director_deathYear'] = df['director_deathYear'].astype(int)
+
+    director_deathYear1 = get_column(df, 'director_deathYear1')
+    if director_deathYear1 is not None:
+        df['director_deathYear1'] = director_deathYear.replace('alive', '2023')
+        df['director_deathYear1'] = df['director_deathYear1'].astype(int)
 
     # Convert 'director_birthYear' and 'director_deathYear' to integers
     director_birthYear = get_column(df, 'director_birthYear')
@@ -56,9 +62,9 @@ def preprocess_data(df):
             df = multi_label_binarization(df, column)
 
     # Group 'worldwide_gross' and trans it into a classification problem
-    # bins = [0, 50000000, 150000000, np.inf]
-    # labels = ['Low', 'Medium', 'High']
-    # df['gross_class'] = pd.cut(df['worldwide_gross'], bins=bins, labels=labels)
+    bins = [0, 50000000, 150000000, np.inf]
+    labels = ['Low', 'Medium', 'High']
+    df['gross_class'] = pd.cut(df['worldwide_gross'], bins=bins, labels=labels)
 
     return df
 
@@ -99,25 +105,42 @@ def train_and_evaluate_model(df):
     return training_time, accuracy, complexity
 
 
+def feature_objs(df):
+    X = df.drop(['worldwide_gross', 'gross_class'], axis=1)
+
+    fisher = objectives.fisher_score(X, df['gross_class'])
+    mi = objectives.mutual_info(X, df['worldwide_gross'])
+    vif = objectives.vif(X)
+
+    return fisher, mi, vif
+
+
 def main():
     start = time.time()
-    dataset_path = "../Dataset/Movie/"
+    dataset_path = "../Baselines/Movie/"
     # filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
-    filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/h2o.csv'
+    filename = sys.argv[1] if len(sys.argv) > 1 else 'metam.csv'
     path = dataset_path + filename
     df = pd.read_csv(path)
+    # print(df.head())
 
     print(f'Training file: {filename}.')
     print(f'Size: {df.shape}.')
 
     df = preprocess_data(df)
     training_time, accuracy, complexity = train_and_evaluate_model(df)
+    complexity = complexity / (df.shape[1]-1)
     end = time.time()
     logging.info(f'Total Retrain time: {end - start} s.')
 
     print(f'Accuracy: {accuracy}.')
     print(f'Complexity: {complexity}.')
     print(f'Training time: {training_time} s.')
+
+    fisher, mi, vif = feature_objs(df)
+    print(f'Fisher: {fisher}.')
+    print(f'MI: {mi}.')
+    print(f'VIF: {vif}.')
 
 
 if __name__ == '__main__':

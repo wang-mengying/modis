@@ -9,7 +9,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 import si_direct as single
 
-logging.basicConfig(filename='../Dataset/Movie/log.txt', level=logging.INFO, format='%(message)s')
+logging.basicConfig(filename='../Dataset/Kaggle/log.txt', level=logging.INFO, format='%(message)s')
 
 
 def is_good(node, constraints):
@@ -98,7 +98,6 @@ def pairwise_distance(u, v, euclidean_max, a):
 
 
 def average_distance(nodes, c_min, b_max, c_max, b_min, r, a=0.5):
-    """ Calculate the average total distance for a set of nodes."""
     pos_min = pos((c_min[1], b_max[2], c_min[2]), (b_max[0], b_max[1], c_min[0]), r, c_min, b_max)
     pos_max = pos((c_max[1], b_min[2], c_max[2]), (b_min[0], b_min[1], c_max[0]), r, c_min, b_max)
     euclidean_max = np.linalg.norm(np.array(pos_min) - np.array(pos_max))
@@ -137,8 +136,8 @@ def get_pivot(grouped_nodes, n, c_min, b_max, c_max, b_min, r, a=0.5):
                         continue
                     # swap v and u
                     sp_temp = sp[group].copy()
-                    print(sp_temp)
-                    print(v)
+                    # print(sp_temp)
+                    # print(v)
                     sp_temp.remove(v)
                     sp_temp.append(u)
 
@@ -171,7 +170,7 @@ def main():
     logging.info(f"max_length: {max_length}")
     r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
 
-    dataset = "../Dataset/Movie/results/ml" + str(max_length) + "/"
+    dataset = "../Dataset/Kaggle/results/ml" + str(max_length) + "/"
     with open(dataset + "nodes.json", "r") as file:
         nodes = json.load(file)
     G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))

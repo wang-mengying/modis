@@ -198,3 +198,6 @@ datasets/
 *.csv
 Dataset/*/*.csv
 *.json
+*/log.txt
+Baselines/
+AutoML/

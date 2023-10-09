@@ -6,9 +6,9 @@ import json
 
 
 def generate_graph(L):
-    n = len(L)  # number of items
+    n = len(L)
     graph = Graph(directed=True)
-    state_to_id = {}  # map from state to unique integer ID
+    state_to_id = {}
 
     def get_vertex_id(state):
         if state not in state_to_id:
@@ -17,11 +17,9 @@ def generate_graph(L):
             graph.add_vertex(id, label=str(state))
         return state_to_id[state]
 
-    # Initialize the source node
     source_node = tuple((1, tuple(range(t_i))) for t_i in L)
     get_vertex_id(source_node)
 
-    # Initialize the queue with the source node
     queue = [source_node]
 
     while queue:
@@ -60,14 +58,12 @@ def generate_graph(L):
 
 
 def export_to_csv(G, state_to_id, path):
-    # Export nodes
     with open(path + 'nodes.csv', 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(["Id", "Label"])
         for state, id in state_to_id.items():
             writer.writerow([id, G.vs[id]["label"]])
 
-    # Export edges
     with open(path + 'edges.csv', 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(["Source", "Target", "Label", "Type"])
@@ -78,7 +74,7 @@ def export_to_csv(G, state_to_id, path):
 def main():
     # L = [2, 3]
     L = [5, 5, 5, 5, 8]
-    # dataset = "../Dataset/Movie/others/"
+    # dataset = "../Dataset/Kaggle/others/"
     #
     # with open(dataset + "cluster_k.json", 'r') as json_file:
     #     data = json.load(json_file)

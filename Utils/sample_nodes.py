@@ -4,13 +4,12 @@ import numpy as np
 
 sys.path.append("../")
 import Trainer.movie_gradient_boosting as mgb
-import Dataset.Movie.others.movie_objectives as movie_objectives
+import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
 import warnings
 warnings.filterwarnings("ignore")
 
 
-# Count of active items/values
 def extract_counts(label):
     items, values = eval(label)
     return sum(items), sum(values)
@@ -32,26 +31,27 @@ def get_sample(df, n_samples=500):
     return sample
 
 
-def process_data(node_label, original_file, clustered_file):
-    df_o = pd.read_csv(original_file)
+def process_data(node_label, clustered_file):
+    # df_o = pd.read_csv(original_file)
     df_c = pd.read_csv(clustered_file)
 
     items, values = eval(node_label)
 
     # Drop columns
     inactive_cols = [i for i, x in enumerate(items) if x == 0]
-    df = df_o.drop(df_o.columns[inactive_cols], axis=1, inplace=False)
+    df = df_c.drop(df_c.columns[inactive_cols], axis=1, inplace=False)
 
     # Drop rows
     inactive_rows = [i for i, x in enumerate(values) if x == 0]
     drop_rows = df_c[df_c['cluster'].isin(inactive_rows)].index
     df.drop(drop_rows, inplace=True)
+    df.drop(['cluster'], axis=1, inplace=True)
 
     # df.to_csv(f'{path}{node_id}.csv', index=False)
     return df
 
 
-def cal_objectives(df_sample, original_file, clustered_file):
+def cal_objectives(df_sample, clustered_file):
     df_sample['num_rows'] = 0
     df_sample['num_cols'] = 0
 
@@ -68,7 +68,7 @@ def cal_objectives(df_sample, original_file, clustered_file):
         print(f"Processing node {node_id}.")
 
         node_label = row['Label']
-        df = process_data(node_label, original_file, clustered_file)
+        df = process_data(node_label, clustered_file)
 
         df_sample.loc[i, 'num_rows'] = df.shape[0]
         df_sample.loc[i, 'num_cols'] = df.shape[1]
@@ -88,8 +88,8 @@ def cal_objectives(df_sample, original_file, clustered_file):
 
 
 def main():
-    dataset = "../Dataset/Movie/"
-    surrogate = "../Surrogate/Movie/"
+    dataset = "../Dataset/Kaggle/"
+    surrogate = "../Surrogate/Kaggle/"
     df = pd.read_csv(dataset + 'others/d7m7/nodes.csv')
 
     print("Sampling ......")

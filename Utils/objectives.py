@@ -30,7 +30,6 @@ def fisher_score(X, y):
     return fisher_scores.mean()
 
 
-# Mutual Information
 def mutual_info(X, y, regression=True):
     if regression:
         mutual_info = mutual_info_regression(X, y)
@@ -43,7 +42,6 @@ def mutual_info(X, y, regression=True):
 
 
 def vif(X):
-    # Add a constant to the data
     data_with_const = add_constant(X)
 
     vif_data = [variance_inflation_factor(data_with_const.values, i)
