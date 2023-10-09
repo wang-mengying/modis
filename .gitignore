@@ -198,6 +198,6 @@ datasets/
 *.csv
 Dataset/*/*.csv
 *.json
-*/log.txt
+log.txt
 Baselines/
 AutoML/

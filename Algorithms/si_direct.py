@@ -16,9 +16,10 @@ sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
 Data = "../Dataset/Kaggle/"
-max_length = 5
+max_length = 6
 
-dataset = Data + "results/ml/" + str(5)
+dataset = Data + "results/ml" + str(max_length) + "/"
+# dataset = dataset.replace('/', '\\')
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 nodes_df = pd.read_csv(dataset + 'nodes.csv')
 edges_df = pd.read_csv(dataset + 'edges.csv')
@@ -36,6 +37,7 @@ def worker_initializer(model_path):
 
 
 def get_objectives(node_id, model, cluster_file=Data+'others/movie_clustered_table.csv'):
+    # cluster_file = cluster_file.replace('/', '\\')
     node = G.nodes[node_id]
     df = movie_objectives.surrogate_inputs(node, cluster_file)
     model_objectives = model.predict(df)[0]
@@ -135,7 +137,6 @@ def get_pareto(G, s, r, t, c_min, b_max, max_length):
     :param b_max: Maximum benefits
     :return: Pi
     """
-    n = len(G)
     Pi = defaultdict(lambda: defaultdict(dict))
     c = [G.nodes[s]['feature_objectives'][2], G.nodes[s]['model_objectives'][0], G.nodes[s]['model_objectives'][2]]
     b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1]]
@@ -192,8 +193,9 @@ def merge(D, node, pos_q, path):
 
 
 def main():
-    epsilon = 0.5
+    epsilon = 0.4
     logging.info(f"epsilon: {epsilon}")
+    logging.info(f"max_length: {max_length}")
     r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1]
     t = [5, 1.5, 555]
 
