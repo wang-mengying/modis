@@ -74,11 +74,16 @@ def cal_objectives(df_sample, clustered_file):
         df_sample.loc[i, 'num_cols'] = df.shape[1]
 
         df = mgb.preprocess_data(df)
-        training_time, accuracy, complexity = mgb.train_and_evaluate_model(df)
+        try:
+            training_time, accuracy, complexity = mgb.train_and_evaluate_model(df)
+        except Exception as e:
+            print(f"Error raised. {e}")
+            training_time, accuracy, complexity = 0.0, 0.0, 0.0
+            continue
         fisher, mutual_info, vif = movie_objectives.feature_objectives(row, clustered_file)
 
         df_sample.loc[i, 'accuracy'] = accuracy
-        df_sample.loc[i, 'complexity'] = complexity/df_sample.loc[i, 'active_items']
+        df_sample.loc[i, 'complexity'] = complexity/(df_sample.loc[i, 'num_cols'] - 1)
         df_sample.loc[i, 'training_time'] = training_time
         df_sample.loc[i, 'fisher'] = fisher
         df_sample.loc[i, 'mutual_info'] = mutual_info

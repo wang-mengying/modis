@@ -32,10 +32,10 @@ def preprocess_data(df):
         df['director_deathYear'] = director_deathYear.replace('alive', '2023')
         df['director_deathYear'] = df['director_deathYear'].astype(int)
 
-    director_deathYear1 = get_column(df, 'director_deathYear1')
-    if director_deathYear1 is not None:
-        df['director_deathYear1'] = director_deathYear.replace('alive', '2023')
-        df['director_deathYear1'] = df['director_deathYear1'].astype(int)
+    # director_deathYear1 = get_column(df, 'director_deathYear1')
+    # if director_deathYear1 is not None:
+    #     df['director_deathYear1'] = director_deathYear.replace('alive', '2023')
+    #     df['director_deathYear1'] = df['director_deathYear1'].astype(int)
 
     # Convert 'director_birthYear' and 'director_deathYear' to integers
     director_birthYear = get_column(df, 'director_birthYear')
@@ -56,10 +56,10 @@ def preprocess_data(df):
             df = bin_enc.fit_transform(df)
 
     # Multi-label binarization for 'genres' and 'director_professions'
-    multi_encode = ['genres', 'director_professions']
-    for column in multi_encode:
-        if column in df.columns:
-            df = multi_label_binarization(df, column)
+    # multi_encode = ['genres', 'director_professions']
+    # for column in multi_encode:
+    #     if column in df.columns:
+    #         df = multi_label_binarization(df, column)
 
     # Group 'worldwide_gross' and trans it into a classification problem
     bins = [0, 50000000, 150000000, np.inf]
@@ -119,8 +119,9 @@ def main():
     start = time.time()
     dataset_path = "../Baselines/Movie/"
     # filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
-    filename = sys.argv[1] if len(sys.argv) > 1 else 'metam.csv'
+    filename = sys.argv[1] if len(sys.argv) > 1 else 'sksfm.csv'
     path = dataset_path + filename
+    path = "../Dataset/Kaggle/processed/movie_filtered.csv"
     df = pd.read_csv(path)
     # print(df.head())
 

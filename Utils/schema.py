@@ -6,6 +6,7 @@ from sklearn.preprocessing import LabelEncoder
 
 sys.path.append("../")
 import Trainer.movie_gradient_boosting as mgb
+import Trainer.avocado_linear_regression as alr
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -87,8 +88,7 @@ def col_categorical(X, y, percentile=80):
     return cat_cols
 
 
-def main():
-    dataset = '../Dataset/Kaggle/'
+def movie(dataset):
     original_path = dataset + 'processed/movie_original.csv'
     extra_path = dataset + 'extra'
     df_original = pd.read_csv(original_path)
@@ -123,6 +123,52 @@ def main():
                              pd.DataFrame(df, columns=cat_cols),
                              pd.DataFrame(df, columns=['worldwide_gross']), ], axis=1)
     df_filtered.to_csv(dataset + 'processed/movie_filtered.csv', index=False)
+
+
+def avocado(dataset):
+    original_path = dataset + 'processed/avocado_original.csv'
+    extra_path = dataset + 'extra'
+    df_original = pd.read_csv(original_path)
+
+    # Table-level Merge
+    for file in os.listdir(extra_path):
+        if file.endswith('.csv'):
+            file_path = os.path.join(extra_path, file)
+            print(file_path)
+            df_extra = pd.read_csv(file_path, encoding_errors='ignore', error_bad_lines=False)
+
+            df_original = merge_table(df_original, df_extra, "AveragePrice")
+    df_original.to_csv(dataset + 'processed/avocado_merged.csv', index=False)
+
+    # Row-level Clean
+    df_cleaned = row_clean(df_original, thr_null=0.5, iqr_factor=2)
+    df_cleaned.to_csv(dataset + 'processed/avocado_cleaned.csv', index=False)
+
+    # Column-level Filter
+    df = pd.read_csv(dataset + 'processed/avocado_cleaned.csv')
+    # categorical_cols = ['type', 'region']
+    # df_num = alr.pre_processing(df.drop(categorical_cols, axis=1))
+    #
+    # X_num = df_num.drop(['AveragePrice'], axis=1)
+    # X_cat = df_cleaned[categorical_cols]
+    # y = df_num['AveragePrice']
+    #
+    # num_cols = col_numeric(X_num, y)
+    # cat_cols = col_categorical(X_cat, y)
+    #
+    # df_filtered = pd.concat([pd.DataFrame(df, columns=num_cols),
+    #                             pd.DataFrame(df, columns=cat_cols),
+    #                             pd.DataFrame(df, columns=['AveragePrice']), ], axis=1)
+    df.to_csv(dataset + 'processed/avocado_filtered.csv', index=False)
+
+
+def main():
+    dataset = "../Dataset/HuggingFace/"
+
+    if dataset == "../Dataset/Kaggle/":
+        movie(dataset)
+    elif dataset == "../Dataset/HuggingFace/":
+        avocado(dataset)
 
 
 if __name__ == '__main__':
