@@ -40,10 +40,14 @@ def get_best_bi(pareto):
         benefits = value["benefits"]
 
         for i, cost in enumerate(costs):
+            if cost is None:
+                continue
             if best_costs[i] is None or cost < best_costs[i][1][i]:
                 best_costs[i] = [label, costs, benefits]
 
         for i, benefit in enumerate(benefits):
+            if benefit is None:
+                continue
             if best_benefits[i] is None or benefit > best_benefits[i][2][i]:
                 best_benefits[i] = [label, costs, benefits]
 
@@ -56,7 +60,7 @@ def get_best_bi(pareto):
     return result
 
 
-def process_files(file_paths, output_file_path, algorithm="apx"):
+def process_files(file_paths, output_file_path, algorithm):
     results = {}
 
     for file_path in file_paths:
@@ -64,7 +68,7 @@ def process_files(file_paths, output_file_path, algorithm="apx"):
             data = json.load(file)
         if algorithm == "apx":
             bests = get_best_apx(data)
-        if algorithm == "no" or "bi":
+        else:
             bests = get_best_bi(data)
         results[file_path.split("/")[-1]] = bests
 
@@ -76,6 +80,9 @@ def generate_excel(results, data, output_excel):
     data_for_excel = []
     for filename, bests in data.items():
         extracted_value = float(filename[3:-5])
+        # if any objevtive is None, skip
+        if any([item is None for item in bests.values()]):
+            continue
         row_data = [
             results[-2],
             extracted_value,
@@ -93,6 +100,8 @@ def generate_csv(results, data, output_csv):
     for filename, bests in data.items():
         extracted_value = filename[-8:-5]
         for key, record in bests.items():
+            if record is None:
+                continue
             data_for_csv.append([f"{results[-2]}_{extracted_value}_{key}", record[0]])
 
     df = pd.DataFrame(data_for_csv, columns=["Id", "Label"])
@@ -103,20 +112,23 @@ def generate_csv(results, data, output_csv):
 
 
 def main():
-    algorithm = "no"
-    results = "../Dataset/Kaggle/results/ml2/"
-    input_files = [results + algorithm + item for item in ["0.1.json", "0.2.json", "0.3.json", "0.4.json", "0.5.json"]]
-    output_json = results + algorithm + "_best.json"
-    output_excel = results + algorithm + "_best.xlsx"
-    output_csv = results + algorithm + "_best.csv"
+    # algorithm = "div"
+    algorithms = ["apx", "div", "no", "bi"]
+    results = "../Dataset/Kaggle/results/ml6/"
 
-    process_files(input_files, output_json, 'bi')
+    for algorithm in algorithms:
+        input_files = [results + algorithm + item for item in ["0.1.json", "0.2.json", "0.3.json", "0.4.json", "0.5.json"]]
+        output_json = results + algorithm + "_best.json"
+        output_excel = results + algorithm + "_best.xlsx"
+        output_csv = results + algorithm + "_best.csv"
 
-    with open(output_json, "r") as file:
-        data = json.load(file)
+        process_files(input_files, output_json, algorithm)
 
-    generate_excel(results, data, output_excel)
-    generate_csv(results, data, output_csv)
+        with open(output_json, "r") as file:
+            data = json.load(file)
+
+        generate_excel(results, data, output_excel)
+        generate_csv(results, data, output_csv)
 
 
 if __name__ == "__main__":

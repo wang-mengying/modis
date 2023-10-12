@@ -121,7 +121,7 @@ def main():
     # filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
     filename = sys.argv[1] if len(sys.argv) > 1 else 'h2o.csv'
     path = dataset_path + filename
-    # path = "../Dataset/Kaggle/processed/movie_filtered.csv"
+    path = "../Dataset/Kaggle/processed/movie_filtered.csv"
     df = pd.read_csv(path)
     # print(df.head())
 

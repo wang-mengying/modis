@@ -6,6 +6,7 @@ import pickle
 import sys
 import time
 import pandas as pd
+import Trainer.movie_gradient_boosting as mgb
 
 import joblib
 
@@ -15,10 +16,14 @@ sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 import Utils.correlation_analysis as correlation_analysis
 
-dataset = "../Dataset/Kaggle/others/d7m8/"
-logging.basicConfig(filename=dataset + 'bi_direct/log_bi.txt', level=logging.INFO, format='%(message)s')
+Data = "../Dataset/Kaggle/"
+max_length = 2
+
+dataset = Data + "results/ml" + str(max_length) + "/"
+# dataset = dataset.replace('/', '\\')
+logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 records = pd.read_csv('../Surrogate/Movie/sample_nodes.csv')
-relations = correlation_analysis.gat_relations(dataset + 'nodes.json')
+relations = correlation_analysis.gat_relations('../Dataset/Kaggle/others/d7m8/nodes.json')
 
 
 # Calculate a Box, which is a tuple of normalized costs and benefits
@@ -378,20 +383,39 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, m
     return pareto_set
 
 
-def main():
-    G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
+def pre_clusters(df, target):
+    classes = df[target].unique()
+    clusters = {}
 
-    start_node = 0
-    end_node = 37653
-    max_length = 20
-    epsilon = [0.5] * 5 + [0.0001]
+    for target_class in classes:
+        dominant_cluster = df[df[target] == target_class].groupby('cluster').size().idxmax()
+        clusters[target_class] = dominant_cluster
+
+    return clusters
+
+
+def main():
+    G = pickle.load(open(Data + 'others/d7m8/costs.gpickle', 'rb'))
+    #
+    # start_node = 0
+    # end_node = 37653
+    e = 0.1
+
+    # epsilon = [e] * 5 + [0.0001]
+    epsilon = [e] * 6
     c_min, b_max = get_cmin_bmax(G)
-    pareto_set = {}
+
+    clusters = pd.read_csv(Data + 'others/movie_clustered_table.csv')
+    clusters = mgb.preprocess_data(clusters)
+    pre = pre_clusters(clusters, 'gross_class')
+    indices = [pre[i] for i in pre.keys()]
+
+    start_state = (tuple([1] * 11), tuple([1] * 11))
+    end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
 
     start_time = time.time()
     # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
-    pareto = bi_directional_search_state((tuple([1] * 11), tuple([1] * 11)),
-                                         (tuple([0] * 11), tuple([0] * 11)), epsilon, c_min, b_max, max_length)
+    pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
     end_time = time.time()
 
     logging.info(f"epsilon: {epsilon}")
@@ -399,7 +423,7 @@ def main():
     logging.info(f"Search time: {end_time - start_time}")
     logging.info(f"Pareto set size: {len(pareto)}")
     pareto_json = json.dumps(pareto, indent=4)
-    with open(dataset + 'bi_direct/pareto.json', 'w') as json_file:
+    with open(dataset + '/no' + str(e) + '.json', 'w') as json_file:
         json_file.write(pareto_json)
 
 

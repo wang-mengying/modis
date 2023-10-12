@@ -1,34 +1,59 @@
 import json
-import math
 import logging
+import math
 import pickle
 import random
 import time
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
+
 import si_direct as single
+import divmodis_solo as solo
 
 logging.basicConfig(filename='../Dataset/Kaggle/log.txt', level=logging.INFO, format='%(message)s')
 
 
-def is_good(node, constraints):
-    """Determine if a node is good based on given constraints"""
-    objectives = node['model_objectives'] + node['feature_objectives']
-    good_statuses = []
+def get_pivot(pareto, n, c_min, b_max, c_max, b_min, r, a=0.5):
+    sp = []
 
-    for idx, (op, value) in enumerate(constraints):
-        if op == ">":
-            good_statuses.append(objectives[idx] > value)
-        elif op == "<":
-            good_statuses.append(objectives[idx] < value)
-    return good_statuses
+    node_poss = list(pareto.keys())
+    if len(node_poss) <= n:
+        sp = node_poss
+        return sp
+
+    random.shuffle(node_poss)
+    sp = node_poss[:n]
+
+    improved = True
+    while improved:
+        improved = False
+        for v in sp:
+            for u in node_poss:
+                if u in sp:
+                    continue
+                # swap v and u
+                sp_temp = sp.copy()
+                # print(sp_temp)
+                # print(v)
+                sp_temp.remove(v)
+                sp_temp.append(u)
+
+                set1 = [node_pos for node_pos in sp]
+                set2 = [node_pos for node_pos in sp_temp]
+
+                distance1 = average_distance(set1, pareto, c_min, b_max, c_max, b_min, r, a)
+                distance2 = average_distance(set2, pareto, c_min, b_max, c_max, b_min, r, a)
+
+                if distance2 > distance1:
+                    sp = sp_temp
+                    improved = True
+                    break
+
+    return sp
 
 
-def pos(m, f, r, c_min, b_max):
-    """Calculate POS for a node"""
-    c = [f[2], m[0], m[2]]
-    b = [f[0], f[1], m[1]]
+def pos(c, b, r, c_min, b_max):
     pos_q = []
 
     # Costs
@@ -39,53 +64,14 @@ def pos(m, f, r, c_min, b_max):
     for i in range(len(b)):
         pos_q.append(math.floor(math.log(b[i] / b_max[i], r[i + len(c)])))
 
-    pos = [pos_q[1], pos_q[5], pos_q[2], pos_q[3], pos_q[4], pos_q[0]]
-
-    return tuple(pos)
+    return tuple(pos_q)
 
 
-def group(constraints, r, c_min, b_max, nodes):
-    """Group nodes based on objectives"""
-    grouped_nodes = {i: {} for i in range(len(r))}
+def pairwise_distance(u, v, pareto, euclidean_max, a):
+    u_pos, v_pos = eval(u), eval(v)
 
-    for node_id, node in nodes.items():
-        good_statuses = is_good(node, constraints)
-        if any(good_statuses):
-            node_pos = pos(node['model_objectives'], node['feature_objectives'], r, c_min, b_max)
-
-        for idx, status in enumerate(good_statuses):
-            if status:
-                grouped_nodes[idx][node_id] = {'pos': str(node_pos), 'label': node['Label'],
-                                               'model_objectives': node['model_objectives'],
-                                               'feature_objectives': node['feature_objectives']}
-
-    return grouped_nodes
-
-
-def get_cmax_bmin(G):
-    """Get maximum costs and minimum benefits"""
-    model_objectives_mins = [min(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
-    feature_objectives_mins = [min(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(3)]
-
-    model_objectives_maxs = [max(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
-    feature_objectives_maxs = [max(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(3)]
-
-    c_max = [feature_objectives_maxs[2], model_objectives_maxs[0], model_objectives_maxs[2]]
-    b_min = [feature_objectives_mins[0], feature_objectives_mins[1], model_objectives_mins[1]]
-
-    return c_max, b_min
-
-
-def pairwise_distance(u, v, euclidean_max, a):
-    def convert_label(label_str):
-        numbers = [int(num) for num in label_str.replace('(', '').replace(')', '').split(',')]
-        return numbers
-
-    u_pos = tuple(map(float, u['pos'][1:-1].split(',')))
-    v_pos = tuple(map(float, v['pos'][1:-1].split(',')))
-
-    u_label = convert_label(u['label'])
-    v_label = convert_label(v['label'])
+    u_label = pareto[u]["nodes"][-1][0] + pareto[u]["nodes"][-1][1]
+    v_label = pareto[v]["nodes"][-1][0] + pareto[v]["nodes"][-1][1]
 
     euclidean = np.linalg.norm(np.array(u_pos) - np.array(v_pos))
     euclidean_nor = euclidean / euclidean_max
@@ -97,12 +83,12 @@ def pairwise_distance(u, v, euclidean_max, a):
     return distance
 
 
-def average_distance(nodes, c_min, b_max, c_max, b_min, r, a=0.5):
-    pos_min = pos((c_min[1], b_max[2], c_min[2]), (b_max[0], b_max[1], c_min[0]), r, c_min, b_max)
-    pos_max = pos((c_max[1], b_min[2], c_max[2]), (b_min[0], b_min[1], c_max[0]), r, c_min, b_max)
+def average_distance(nodes, pareto, c_min, b_max, c_max, b_min, r, a=0.5):
+    pos_min = pos(c_min, b_max, r, c_min, b_max)
+    pos_max = pos(c_max, b_min, r, c_min, b_max)
     euclidean_max = np.linalg.norm(np.array(pos_min) - np.array(pos_max))
 
-    total_distance = sum(pairwise_distance(u, v, euclidean_max, a)
+    total_distance = sum(pairwise_distance(u, v, pareto, euclidean_max, a)
                          for i, u in enumerate(nodes)
                          for j, v in enumerate(nodes)
                          if i < j)
@@ -114,89 +100,41 @@ def average_distance(nodes, c_min, b_max, c_max, b_min, r, a=0.5):
     return avg_distance
 
 
-def get_pivot(grouped_nodes, n, c_min, b_max, c_max, b_min, r, a=0.5):
-    sp = {}  # pivot set
-
-    for group, nodes in grouped_nodes.items():
-        # 1. Initialization
-        node_ids = list(nodes.keys())
-        if len(node_ids) <= n:
-            sp[group] = node_ids
-            continue
-        random.shuffle(node_ids)
-        sp[group] = node_ids[:n]
-
-        # 2. Iteration
-        improved = True
-        while improved:
-            improved = False
-            for v in sp[group]:
-                for u in node_ids:
-                    if u in sp[group]:
-                        continue
-                    # swap v and u
-                    sp_temp = sp[group].copy()
-                    # print(sp_temp)
-                    # print(v)
-                    sp_temp.remove(v)
-                    sp_temp.append(u)
-
-                    set1 = [nodes[node_id] for node_id in sp[group]]
-                    set2 = [nodes[node_id] for node_id in sp_temp]
-
-                    distance1 = average_distance(set1, c_min, b_max, c_max, b_min, r, a)
-                    distance2 = average_distance(set2, c_min, b_max, c_max, b_min, r, a)
-
-                    if distance2 > distance1:
-                        sp[group] = sp_temp
-                        improved = True
-                        break
-
-    return sp
-
-
-def combine(nodes, pivot):
-    pivot_list = list({item for sublist in pivot.values() for item in sublist})
-
-    pivot_nodes = {node_id: nodes[node_id] for node_id in pivot_list}
-
-    return pivot_nodes
-
-
 def main():
+    length = 6
     epsilon = 0.5
-    max_length = 2
-    logging.info(f"epsilon: {epsilon}")
-    logging.info(f"max_length: {max_length}")
+    algorithm = "no"
+    size = 6
     r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
+    dataset = "../Dataset/Kaggle/results/ml" + str(length) + "/"
+    # dataset = dataset.replace('/', '\\')
+    logging.info(f"epsilon: {epsilon}")
+    logging.info(f"max_length: {length}")
+    logging.info(f"cardinality: {size}")
 
-    dataset = "../Dataset/Kaggle/results/ml" + str(max_length) + "/"
-    with open(dataset + "nodes.json", "r") as file:
-        nodes = json.load(file)
-    G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
+    nodes_file = dataset + algorithm + str(epsilon) + '.json'
+    with open(nodes_file, "r") as file:
+        pareto = json.load(file)
+
+    G = pickle.load(open('../Dataset/Kaggle/others/d7m8/costs.gpickle', 'rb'))
     c_min, b_max = single.get_cmin_bmax(G)
-    c_max, b_min = get_cmax_bmin(G)
+    c_max, b_min = solo.get_cmax_bmin(G)
 
-    constraints = [["<", 1.0], [">", 0.88], ["<", 545], [">", 0.45], [">", 0.38], ["<", 1.3]]
-    grouped_nodes = group(constraints, r, c_min, b_max, nodes)
-    # grouped_json = json.dumps(grouped_nodes, indent=4)
-    # with open(dataset + 'group' + str(epsilon) + '.json', 'w') as json_file:
-    #     json_file.write(grouped_json)
-
+    print("Getting pivot set...")
     start = time.time()
-    pivot = get_pivot(grouped_nodes, 5, c_min, b_max, c_max, b_min, r)
+    pivot = get_pivot(pareto, size, c_min, b_max, c_max, b_min, r)
     end = time.time()
-    logging.info(f"DivMODis search time: {end - start}")
-    pivot_json = json.dumps(pivot, indent=4)
-    with open(dataset + 'div' + str(epsilon) + '_group.json', 'w') as json_file:
+    logging.info(f"Number of pivot nodes: {len(pivot)}")
+    logging.info(f"DivMODis search time: {end - start}\n")
+
+    print("Outputting pivot")
+    pivot_nodes = {node_pos: pareto[node_pos] for node_pos in pivot}
+    pivot_json = json.dumps(pivot_nodes, indent=4)
+    with open(dataset + 'div' + str(epsilon) + '.json', 'w') as json_file:
         json_file.write(pivot_json)
 
-    pivot_nodes = combine(nodes, pivot)
-    logging.info(f"Number of pivot nodes: {len(pivot_nodes)}")
-    pivot_nodes_json = json.dumps(pivot_nodes, indent=4)
-    with open(dataset + 'div' + str(epsilon) + '_nodes.json', 'w') as json_file:
-        json_file.write(pivot_nodes_json)
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
+
+
