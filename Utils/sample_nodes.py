@@ -31,27 +31,27 @@ def get_sample(df, n_samples=500):
     return sample
 
 
-def process_data(node_label, clustered_file):
-    # df_o = pd.read_csv(original_file)
+def process_data(node_label, original_file, clustered_file):
+    df_o = pd.read_csv(original_file)
     df_c = pd.read_csv(clustered_file)
 
     items, values = eval(node_label)
 
     # Drop columns
     inactive_cols = [i for i, x in enumerate(items) if x == 0]
-    df = df_c.drop(df_c.columns[inactive_cols], axis=1, inplace=False)
+    df = df_o.drop(df_c.columns[inactive_cols], axis=1, inplace=False)
 
     # Drop rows
     inactive_rows = [i for i, x in enumerate(values) if x == 0]
     drop_rows = df_c[df_c['cluster'].isin(inactive_rows)].index
     df.drop(drop_rows, inplace=True)
-    df.drop(['cluster'], axis=1, inplace=True)
+    # df.drop(['cluster'], axis=1, inplace=True)
 
     # df.to_csv(f'{path}{node_id}.csv', index=False)
     return df
 
 
-def cal_objectives(df_sample, clustered_file):
+def cal_objectives(df_sample, original_file, clustered_file):
     df_sample['num_rows'] = 0
     df_sample['num_cols'] = 0
 
@@ -68,7 +68,7 @@ def cal_objectives(df_sample, clustered_file):
         print(f"Processing node {node_id}.")
 
         node_label = row['Label']
-        df = process_data(node_label, clustered_file)
+        df = process_data(node_label, original_file, clustered_file)
 
         df_sample.loc[i, 'num_rows'] = df.shape[0]
         df_sample.loc[i, 'num_cols'] = df.shape[1]
@@ -80,7 +80,8 @@ def cal_objectives(df_sample, clustered_file):
             print(f"Error raised. {e}")
             training_time, accuracy, complexity = 0.0, 0.0, 0.0
             continue
-        fisher, mutual_info, vif = movie_objectives.feature_objectives(row, clustered_file)
+
+        fisher, mutual_info, vif = movie_objectives.feature_objectives(row, original_file, clustered_file)
 
         df_sample.loc[i, 'accuracy'] = accuracy
         df_sample.loc[i, 'complexity'] = complexity/(df_sample.loc[i, 'num_cols'] - 1)

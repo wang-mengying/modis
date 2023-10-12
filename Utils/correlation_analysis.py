@@ -28,11 +28,12 @@ def preprocessing(json_file):
     return df
 
 
-def gat_relations(json_file, threshold=0.8):
+def gat_relations(json_file, threshold=0.5):
     df = preprocessing(json_file)
 
     objectives = df.columns
     correlation_matrix = df.corr(method='spearman')
+
     strong_relations = {}
 
     for i, obj1 in enumerate(objectives):

@@ -25,6 +25,7 @@ def preprocess_data(df):
     df = df.replace('-', '0')
     df = df.replace('\\N', '0')
     df = df.replace(np.NaN, '0')
+    df = df.replace('nan', '0')
 
     # Replace 'alive' with the current year in 'director_deathYear' column
     director_deathYear = get_column(df, 'director_deathYear')
@@ -32,10 +33,10 @@ def preprocess_data(df):
         df['director_deathYear'] = director_deathYear.replace('alive', '2023')
         df['director_deathYear'] = df['director_deathYear'].astype(int)
 
-    # director_deathYear1 = get_column(df, 'director_deathYear1')
+    # director_deathYear1 = get_column(df, 'director_deathYear_new')
     # if director_deathYear1 is not None:
-    #     df['director_deathYear1'] = director_deathYear.replace('alive', '2023')
-    #     df['director_deathYear1'] = df['director_deathYear1'].astype(int)
+    #     df['director_deathYear_new'] = director_deathYear.replace('alive', '2023')
+    #     df['director_deathYear_new'] = df['director_deathYear_new'].astype(int)
 
     # Convert 'director_birthYear' and 'director_deathYear' to integers
     director_birthYear = get_column(df, 'director_birthYear')
@@ -56,15 +57,18 @@ def preprocess_data(df):
             df = bin_enc.fit_transform(df)
 
     # Multi-label binarization for 'genres' and 'director_professions'
-    # multi_encode = ['genres', 'director_professions']
-    # for column in multi_encode:
-    #     if column in df.columns:
-    #         df = multi_label_binarization(df, column)
+    multi_encode = ['genres', 'director_professions']
+    for column in multi_encode:
+        if column in df.columns:
+            df = multi_label_binarization(df, column)
 
     # Group 'worldwide_gross' and trans it into a classification problem
     bins = [0, 50000000, 150000000, np.inf]
     labels = ['Low', 'Medium', 'High']
     df['gross_class'] = pd.cut(df['worldwide_gross'], bins=bins, labels=labels)
+
+    # drop rows with missing values
+    df = df.dropna()
 
     return df
 
@@ -119,9 +123,8 @@ def main():
     start = time.time()
     dataset_path = "../Baselines/Movie/"
     # filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
-    filename = sys.argv[1] if len(sys.argv) > 1 else 'sksfm.csv'
+    filename = sys.argv[1] if len(sys.argv) > 1 else 'h2o.csv'
     path = dataset_path + filename
-    path = "../Dataset/Kaggle/processed/movie_filtered.csv"
     df = pd.read_csv(path)
     # print(df.head())
 
@@ -129,6 +132,7 @@ def main():
     print(f'Size: {df.shape}.')
 
     df = preprocess_data(df)
+    # df = df.iloc[:3000]
     training_time, accuracy, complexity = train_and_evaluate_model(df)
     complexity = complexity / (df.shape[1]-1)
     end = time.time()

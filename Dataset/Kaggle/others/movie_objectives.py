@@ -7,6 +7,7 @@ import numpy as np
 sys.path.append("../")
 import Utils.sample_nodes as sample
 import Utils.objectives as objectives
+import Trainer.movie_gradient_boosting as mgb
 
 
 def count_cluster(file_path):
@@ -43,12 +44,13 @@ def surrogate_inputs(node, file_path):
     return df
 
 
-def feature_objectives(node, clustered_file):
-    df = sample.process_data(node['Label'], clustered_file)
+def feature_objectives(node, original_file, clustered_file):
+    df = sample.process_data(node['Label'], original_file, clustered_file)
+    df = mgb.preprocess_data(df)
 
-    bins = [0, 50000000, 150000000, np.inf]
-    labels = ['Low', 'Medium', 'High']
-    df['gross_class'] = pd.cut(df['worldwide_gross'], bins=bins, labels=labels)
+    # bins = [0, 50000000, 150000000, np.inf]
+    # labels = ['Low', 'Medium', 'High']
+    # df['gross_class'] = pd.cut(df['worldwide_gross'], bins=bins, labels=labels)
 
     X = df.drop(['worldwide_gross', 'gross_class'], axis=1)
 
@@ -69,7 +71,7 @@ def main():
 
     model_objs = model.predict(df)[0]
     print(model_objs)
-    feature_objs = feature_objectives(node, 'movie_clustered_table.csv')
+    feature_objs = feature_objectives(node, '../processed/movie_filtered.csv', 'movie_clustered_table.csv')
     print(feature_objs)
 
 

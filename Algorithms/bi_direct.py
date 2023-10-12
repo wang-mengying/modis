@@ -6,6 +6,7 @@ import pickle
 import sys
 import time
 import joblib
+import numpy as np
 import pandas as pd
 import Trainer.movie_gradient_boosting as mgb
 
@@ -28,18 +29,19 @@ def cal_box(path, epsilon, c_min, b_max):
 
     # Costs
     for i in range(len(path["costs"])):
-        box.append(0) if path["costs"][i] == 0 else \
+        box.append(0) if path["costs"][i] == 0 or math.isnan(path["costs"][i]) else \
             box.append(math.floor(math.log(path["costs"][i] / c_min[i], 1 + epsilon[i])))
 
     # Benefits
     for i in range(len(path["benefits"])):
-        box.append(0) if path["benefits"][i] == 0 else \
+        box.append(0) if path["benefits"][i] == 0 or math.isnan(path["benefits"][i]) else \
             box.append(math.floor(math.log(path["benefits"][i] / b_max[i], 1 - epsilon[i + len(path["costs"])])))
 
     return tuple(box)
 
 
-def costs_benefits(state, model_path='../Surrogate/Movie/movie_surrogate.joblib',
+def costs_benefits(state, original_file=Data+'processed/movie_filtered.csv',
+                   model_path='../Surrogate/Movie/movie_surrogate.joblib',
                    cluster_file=Data+'others/movie_clustered_table.csv'):
     node = {}
     node['Label'] = str(state)
@@ -47,7 +49,7 @@ def costs_benefits(state, model_path='../Surrogate/Movie/movie_surrogate.joblib'
 
     model = joblib.load(model_path)
     model_objectives = list(model.predict(df)[0])
-    feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+    feature_objectives = movie_objectives.feature_objectives(node, original_file, cluster_file)
 
     costs = [feature_objectives[2], model_objectives[0], model_objectives[2]]
     benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1]]
@@ -367,6 +369,10 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, m
     return pareto_set
 
 def pre_clusters(df, target):
+    bins = [0, 50000000, 150000000, np.inf]
+    labels = ['Low', 'Medium', 'High']
+    df['gross_class'] = pd.cut(df['worldwide_gross'], bins=bins, labels=labels)
+
     classes = df[target].unique()
     clusters = {}
 
@@ -382,14 +388,14 @@ def main():
     #
     # start_node = 0
     # end_node = 37653
-    e = 0.1
+    e = 0.5
 
     # epsilon = [e] * 5 + [0.0001]
     epsilon = [e] * 6
     c_min, b_max = get_cmin_bmax(G)
 
     clusters = pd.read_csv(Data + 'others/movie_clustered_table.csv')
-    clusters = mgb.preprocess_data(clusters)
+    # clusters = mgb.preprocess_data(clusters)
     pre = pre_clusters(clusters, 'gross_class')
     indices = [pre[i] for i in pre.keys()]
 

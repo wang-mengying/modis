@@ -163,7 +163,7 @@ def avocado(dataset):
 
 
 def main():
-    dataset = "../Dataset/HuggingFace/"
+    dataset = "../Dataset/Kaggle/"
 
     if dataset == "../Dataset/Kaggle/":
         movie(dataset)

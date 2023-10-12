@@ -36,12 +36,14 @@ def worker_initializer(model_path):
     surrogate_model = joblib.load(model_path)
 
 
-def get_objectives(node_id, model, cluster_file=Data+'others/movie_clustered_table.csv'):
+def get_objectives(node_id, model,
+                   original_file=Data+'processed/movie_original.csv',
+                   cluster_file=Data+'others/movie_clustered_table.csv'):
     # cluster_file = cluster_file.replace('/', '\\')
     node = G.nodes[node_id]
     df = movie_objectives.surrogate_inputs(node, cluster_file)
     model_objectives = model.predict(df)[0]
-    feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+    feature_objectives = movie_objectives.feature_objectives(node, original_file, cluster_file)
 
     return list(model_objectives), feature_objectives
 

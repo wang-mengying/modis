@@ -5,21 +5,28 @@ import math
 import pickle
 import sys
 import time
+
+import numpy as np
 import pandas as pd
 
 import joblib
 
 from Algorithms.si_direct import get_cmin_bmax
+import Trainer.movie_gradient_boosting as mgb
 
 sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 import Utils.correlation_analysis as correlation_analysis
 
-dataset = "../Dataset/Kaggle/others/d7m8/"
-logging.basicConfig(filename=dataset + 'bi_direct/log_bi.txt', level=logging.INFO, format='%(message)s')
+Data = "../Dataset/Kaggle/"
+max_length = 2
+
+dataset = Data + "results/ml" + str(max_length) + "/"
+# dataset = dataset.replace('/', '\\')
+logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
+
 records = pd.read_csv('../Surrogate/Movie/sample_nodes.csv')
 relations = correlation_analysis.gat_relations(dataset + 'nodes.json')
-
 
 # Calculate a Box, which is a tuple of normalized costs and benefits
 def cal_box(path, epsilon, c_min, b_max):
@@ -27,12 +34,16 @@ def cal_box(path, epsilon, c_min, b_max):
 
     # Costs
     for i in range(len(path["costs"])):
-        box.append(0) if path["costs"][i] == 0 or path["costs"][i] ==None else \
+        box.append(0) if path["costs"][i] == 0 \
+                         or path["costs"][i] ==None \
+                         or math.isnan(path["costs"][i])else \
             box.append(math.floor(math.log(path["costs"][i] / c_min[i], 1 + epsilon[i])))
 
     # Benefits
     for i in range(len(path["benefits"])):
-        box.append(0) if path["benefits"][i] == 0 or path["costs"][i] == None else \
+        box.append(0) if path["benefits"][i] == 0 \
+                         or path["benefits"][i] == None \
+                         or math.isnan(path["benefits"][i]) else \
             box.append(math.floor(math.log(path["benefits"][i] / b_max[i], 1 - epsilon[i + len(path["costs"])])))
 
     return tuple(box)
@@ -54,11 +65,12 @@ def costs_benefits(state, model_path='../Surrogate/Kaggle/movie_surrogate.joblib
     return [costs, benefits]
 
 
-def costs_benefits_part(state, cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
+def costs_benefits_part(state, original_file=Data+'processed/movie_filtered.csv',
+                        cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
     node = {}
     node['Label'] = str(state)
 
-    feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+    feature_objectives = movie_objectives.feature_objectives(node, original_file, cluster_file)
 
     costs = [feature_objectives[2], None, None]
     benefits = [feature_objectives[0], feature_objectives[1], None]
@@ -81,6 +93,7 @@ def find_related_objective(obj, relations):
 
 def fill_missing_objectives(state):
     costs, benefits = costs_benefits_part(state)
+
     c = ['vif', 'training_time', 'complexity']
     b = ['fisher', 'mutual_info', 'accuracy']
 
@@ -282,7 +295,7 @@ def spawn_state(state, direction="F"):
     return neighbors
 
 
-def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length=20):
+def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length):
     pareto_set = {}
     sandwich_bounds = set()
     prun_set = set()
@@ -304,7 +317,7 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, m
         # Forward exploration
         print(f"pathsF: {len(pathsF)}")
         for boxF, pathF in pathsF.items():
-            if len(pathF['nodes']) > max_length/2:
+            if len(pathF['nodes']) > max_length:
                 continue
 
             current_state = pathF['nodes'][-1]
@@ -333,7 +346,7 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, m
         # Backward exploration
         print(f"pathsB: {len(pathsB)}")
         for boxB, pathB in pathsB.items():
-            if len(pathB['nodes']) > max_length/2:
+            if len(pathB['nodes']) > max_length:
                 continue
 
             current_state = pathB['nodes'][-1]
@@ -378,20 +391,43 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, m
     return pareto_set
 
 
-def main():
-    G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
+def pre_clusters(df, target):
+    bins = [0, 50000000, 150000000, np.inf]
+    labels = ['Low', 'Medium', 'High']
+    df['gross_class'] = pd.cut(df['worldwide_gross'], bins=bins, labels=labels)
 
-    start_node = 0
-    end_node = 37653
-    max_length = 20
-    epsilon = [0.5] * 5 + [0.0001]
+    classes = df[target].unique()
+    clusters = {}
+
+    for target_class in classes:
+        dominant_cluster = df[df[target] == target_class].groupby('cluster').size().idxmax()
+        clusters[target_class] = dominant_cluster
+
+    return clusters
+
+
+def main():
+    G = pickle.load(open(Data + 'others/d7m8/costs.gpickle', 'rb'))
+    #
+    # start_node = 0
+    # end_node = 37653
+    e = 0.5
+
+    # epsilon = [e] * 5 + [0.0001]
+    epsilon = [e] * 6
     c_min, b_max = get_cmin_bmax(G)
-    pareto_set = {}
+
+    clusters = pd.read_csv(Data + 'others/movie_clustered_table.csv')
+    # clusters = mgb.preprocess_data(clusters)
+    pre = pre_clusters(clusters, 'gross_class')
+    indices = [pre[i] for i in pre.keys()]
+
+    start_state = (tuple([1] * 11), tuple([1] * 11))
+    end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
 
     start_time = time.time()
     # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
-    pareto = bi_directional_search_state((tuple([1] * 11), tuple([1] * 11)),
-                                         (tuple([0] * 11), tuple([0] * 11)), epsilon, c_min, b_max, max_length)
+    pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
     end_time = time.time()
 
     logging.info(f"epsilon: {epsilon}")
@@ -399,7 +435,7 @@ def main():
     logging.info(f"Search time: {end_time - start_time}")
     logging.info(f"Pareto set size: {len(pareto)}")
     pareto_json = json.dumps(pareto, indent=4)
-    with open(dataset + 'bi_direct/pareto.json', 'w') as json_file:
+    with open(dataset + 'bi' + str(e) + '.json', 'w') as json_file:
         json_file.write(pareto_json)
 
 
