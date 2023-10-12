@@ -9,9 +9,9 @@ from statsmodels.tools.tools import add_constant
 def fisher_score(X, y):
     classes = np.unique(y)
     c = len(classes)
-    m, n = X.shape
 
     overall_mean = np.mean(X, axis=0)
+    n = overall_mean.shape
 
     S_b = np.zeros(n)
     S_w = np.zeros(n)
@@ -43,6 +43,7 @@ def mutual_info(X, y, regression=True):
 
 def vif(X):
     data_with_const = add_constant(X)
+    data_with_const = data_with_const.select_dtypes(exclude='object')
 
     vif_data = [variance_inflation_factor(data_with_const.values, i)
                 for i in range(data_with_const.shape[1])]
