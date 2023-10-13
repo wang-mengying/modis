@@ -201,3 +201,4 @@ Dataset/*/*.csv
 log.txt
 Baselines/
 AutoML/
+results/*
