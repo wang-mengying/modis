@@ -56,10 +56,10 @@ def preprocess_data(df):
             df = bin_enc.fit_transform(df)
 
     # Multi-label binarization for 'genres' and 'director_professions'
-    multi_encode = ['genres', 'director_professions']
-    for column in multi_encode:
-        if column in df.columns:
-            df = multi_label_binarization(df, column)
+    # multi_encode = ['genres', 'director_professions']
+    # for column in multi_encode:
+    #     if column in df.columns:
+    #         df = multi_label_binarization(df, column)
 
     # Group 'worldwide_gross' and trans it into a classification problem
     bins = [0, 50000000, 150000000, np.inf]

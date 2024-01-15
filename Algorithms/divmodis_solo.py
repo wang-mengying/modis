@@ -75,6 +75,16 @@ def get_cmax_bmin(G):
 
     return c_max, b_min
 
+def get_cmax_min(G):
+    """Get maximum costs and minimum benefits"""
+    model_objectives_mins = [min(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
+    model_objectives_maxs = [max(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
+
+    c_max = [model_objectives_maxs[0], model_objectives_maxs[1], model_objectives_maxs[2]]
+    c_min = [model_objectives_mins[0], model_objectives_mins[1], model_objectives_mins[2]]
+
+    return c_min, c_max
+
 
 def pairwise_distance(u, v, euclidean_max, a):
     def convert_label(label_str):

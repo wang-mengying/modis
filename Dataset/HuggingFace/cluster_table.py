@@ -1,16 +1,15 @@
 import pandas as pd
 from sklearn.cluster import KMeans
-from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import silhouette_score
 
 import warnings
 warnings.filterwarnings("ignore")
 import Trainer.avocado_linear_regression as alr
 
-data = pd.read_csv('./processed/avocado_filtered.csv')
+data = pd.read_csv('./extra/avocado_full.csv')
 target = 'AveragePrice'
 min_clusters = 10
-max_clusters = 30
+max_clusters = 20
 
 
 def optimal_kmeans(feature, max_clusters):
@@ -34,6 +33,6 @@ data = data.fillna(data.mean())
 data = alr.pre_processing(data)
 clusters, labels = optimal_kmeans(data, max_clusters)
 data['cluster'] = labels
-print(clusters)
+print(clusters) #(10, 12)
 
 data.to_csv('clustered_table.csv', index=False)

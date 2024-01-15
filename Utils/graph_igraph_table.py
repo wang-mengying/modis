@@ -61,13 +61,13 @@ def generate_graph(features, clusters, t_drop=0.7, t_modify=0.8, max_depth=2):
 
 
 def main():
-    features = 11
-    clusters = 11
+    features = 20
+    clusters = 7
     start = time.time()
     graph, state_to_id = generate_graph(features, clusters)
     end = time.time()
     print(end - start)
-    dataset = "../Dataset/Kaggle/results/ml2/"
+    dataset = "../Dataset/House/results/ml6/"
     # dataset = "../Example/small/t_cluster/maxl/"
 
     # Nodes

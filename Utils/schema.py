@@ -126,7 +126,7 @@ def movie(dataset):
 
 
 def avocado(dataset):
-    original_path = dataset + 'processed/avocado_original.csv'
+    original_path = dataset + 'housing.csv'
     extra_path = dataset + 'extra'
     df_original = pd.read_csv(original_path)
 
@@ -163,7 +163,7 @@ def avocado(dataset):
 
 
 def main():
-    dataset = "../Dataset/HuggingFace/"
+    dataset = "../Dataset/Kaggle/"
 
     if dataset == "../Dataset/Kaggle/":
         movie(dataset)

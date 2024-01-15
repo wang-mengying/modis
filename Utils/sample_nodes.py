@@ -2,9 +2,12 @@ import sys
 import pandas as pd
 import numpy as np
 
+from Trainer import house_random_forest
+
 sys.path.append("../")
 import Trainer.movie_gradient_boosting as mgb
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
+import Trainer.avocado_linear_regression as alr
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -15,7 +18,7 @@ def extract_counts(label):
     return sum(items), sum(values)
 
 
-def get_sample(df, n_samples=500):
+def get_sample(df, n_samples=5):
     df[['active_items', 'active_values']] = df['Label'].apply(extract_counts).apply(pd.Series)
     df['stratum'] = df['active_items'].astype(str) + '-' + df['active_values'].astype(str)
 
@@ -34,7 +37,6 @@ def get_sample(df, n_samples=500):
 def process_data(node_label, clustered_file):
     # df_o = pd.read_csv(original_file)
     df_c = pd.read_csv(clustered_file)
-
     items, values = eval(node_label)
 
     # Drop columns
@@ -51,7 +53,7 @@ def process_data(node_label, clustered_file):
     return df
 
 
-def cal_objectives(df_sample, clustered_file):
+def cal_objectives_movie(df_sample, clustered_file):
     df_sample['num_rows'] = 0
     df_sample['num_cols'] = 0
 
@@ -92,7 +94,74 @@ def cal_objectives(df_sample, clustered_file):
     return df_sample
 
 
-def main():
+def cal_objectives_avocado(df_sample, original_file, clustered_file):
+    df_sample['num_rows'] = 0
+    df_sample['num_cols'] = 0
+
+    df_sample['mse'] = 0.0
+    df_sample['mae'] = 0.0
+    df_sample['training_time'] = 0.0
+
+    for i, row in df_sample.iterrows():
+        node_id = row['Id']
+        print(f"Processing node {node_id}.")
+
+        node_label = row['Label']
+        df = process_data(node_label, clustered_file)
+
+        df_sample.loc[i, 'num_rows'] = df.shape[0]
+        df_sample.loc[i, 'num_cols'] = df.shape[1]
+
+        df = alr.pre_processing(df)
+        mse, mae, training_time = alr.train_test(df)
+        # try:
+        #     mse, mae, training_time = alr.train_test(df)
+        # except Exception as e:
+        #     print(f"Error raised. {e}")
+        #     mse, mae, training_time = 0.0, 0.0, 0.0
+        #     continue
+
+        df_sample.loc[i, 'mse'] = mse
+        df_sample.loc[i, 'mae'] = mae
+        df_sample.loc[i, 'training_time'] = training_time
+
+    return df_sample
+
+def cal_objectives_house(df_sample, original_file, clustered_file):
+    df_sample['num_rows'] = 0
+    df_sample['num_cols'] = 0
+
+    df_sample['accuracy'] = 0.0
+    df_sample['f1'] = 0.0
+    df_sample['training_time'] = 0.0
+
+    for i, row in df_sample.iterrows():
+        node_id = row['Id']
+        print(f"Processing node {node_id}.")
+
+        node_label = row['Label']
+        df = process_data(node_label, clustered_file)
+
+        df_sample.loc[i, 'num_rows'] = df.shape[0]
+        df_sample.loc[i, 'num_cols'] = df.shape[1]
+
+        df = pd.read_csv(original_file)
+        X, y, _ = house_random_forest.process_data(df)
+
+        try:
+            accuracy, f1, training_time = house_random_forest.train_and_save_model(X, y)
+        except Exception as e:
+            print(f"Error raised. {e}")
+            accuracy, f1, training_time = 0.0, 0.0, 0.0
+            continue
+
+        df_sample.loc[i, 'accuracy'] = accuracy
+        df_sample.loc[i, 'f1'] = f1
+        df_sample.loc[i, 'training_time'] = training_time
+
+    return df_sample
+
+def movie():
     dataset = "../Dataset/Kaggle/"
     surrogate = "../Surrogate/Kaggle/"
     df = pd.read_csv(dataset + 'others/d7m7/nodes.csv')
@@ -102,10 +171,49 @@ def main():
     sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
 
     print("Start training ......")
-    sample =cal_objectives(sample, dataset + 'processed/movie_filtered.csv',
-                         dataset + 'others/movie_clustered_table.csv')
+    sample = cal_objectives_movie(sample, dataset + 'processed/movie_filtered.csv',
+                            dataset + 'others/movie_clustered_table.csv')
 
     sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
+
+
+def avocado():
+    dataset = "../Dataset/HuggingFace/"
+    surrogate = "../Surrogate/HuggingFace/"
+    df = pd.read_csv(dataset + 'results/ml2/nodes.csv')
+
+    print("Sampling ......")
+    sample = get_sample(df)
+    sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
+
+    print("Start training ......")
+    sample = cal_objectives_avocado(sample, dataset + 'extra/avocado_full.csv',
+                                    dataset + 'clustered_table.csv')
+
+
+    sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
+
+
+def house():
+    dataset = "../Dataset/House/"
+    surrogate = "../Surrogate/House/"
+    df = pd.read_csv(dataset + 'results/ml6/nodes.csv')
+
+    print("Sampling ......")
+    sample = get_sample(df)
+    sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
+
+    print("Start training ......")
+    sample = cal_objectives_house(sample, dataset + 'housing.csv',
+                                        dataset + 'clustered_table.csv')
+
+    sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
+
+
+def main():
+    # movie()
+    # avocado()
+    house()
 
 
 if __name__ == '__main__':

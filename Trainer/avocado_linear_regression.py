@@ -5,6 +5,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import time
+import  Trainer.movie_gradient_boosting as mgb
 
 
 def pre_processing(avocado_data):
@@ -13,16 +14,28 @@ def pre_processing(avocado_data):
     avocado_data = avocado_data.replace('\\N', '0')
     avocado_data = avocado_data.replace(np.NaN, '0')
 
-    avocado_data['Date'] = pd.to_datetime(avocado_data['Date'])
-    avocado_data['month'] = avocado_data['Date'].dt.month
-    avocado_data['day'] = avocado_data['Date'].dt.day
-    avocado_data.drop(columns=['Date', 'year'], inplace=True)
+    date = mgb.get_column(avocado_data, 'Date')
+    if date is not None:
+        avocado_data['Date'] = pd.to_datetime(avocado_data['Date'])
+        avocado_data['month'] = avocado_data['Date'].dt.month
+        avocado_data['day'] = avocado_data['Date'].dt.day
+        avocado_data.drop(columns=['Date', 'year'], inplace=True)
 
-    encoder = OneHotEncoder(drop='first', sparse=False)
-    encoded_features = encoder.fit_transform(avocado_data[['type', 'region']])
-    encoded_df = pd.DataFrame(encoded_features, columns=encoder.get_feature_names_out(['type', 'region']))
-    avocado_data = pd.concat([avocado_data, encoded_df], axis=1)
-    avocado_data.drop(columns=['type', 'region'], inplace=True)
+    type = mgb.get_column(avocado_data, 'type')
+    if type is not None:
+        encoder = OneHotEncoder(drop='first', sparse=False)
+        encoded_features = encoder.fit_transform(avocado_data[['type']])
+        encoded_df = pd.DataFrame(encoded_features, columns=encoder.get_feature_names_out(['type']))
+        avocado_data = pd.concat([avocado_data, encoded_df], axis=1)
+        avocado_data.drop(columns=['type'], inplace=True)
+
+    reigon = mgb.get_column(avocado_data, 'region')
+    if reigon is not None:
+        encoder = OneHotEncoder(drop='first', sparse=False)
+        encoded_features = encoder.fit_transform(avocado_data[['region']])
+        encoded_df = pd.DataFrame(encoded_features, columns=encoder.get_feature_names_out(['region']))
+        avocado_data = pd.concat([avocado_data, encoded_df], axis=1)
+        avocado_data.drop(columns=['region'], inplace=True)
 
     return avocado_data
 
@@ -47,7 +60,7 @@ def train_test(avocado_data):
 
 
 def main():
-    avocado_data = pd.read_csv('../Dataset/HuggingFace/processed/avocado_filtered.csv')
+    avocado_data = pd.read_csv('../Baselines/Avocado/h2o.csv')
     print(f'Size: {avocado_data.shape}.')
     avocado_data = pre_processing(avocado_data)
     mse, mae, training_time = train_test(avocado_data)

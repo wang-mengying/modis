@@ -25,7 +25,23 @@ def get_best_apx(pareto):
         result[f"b{i+1}"] = [d[2], d[3], d[4]]
 
     print(result)
-        
+
+    return result
+
+def get_best_apx_cost_only(pareto):
+    best_costs = [None] * len(next(iter(pareto.values()))[1])
+
+    for key, value in pareto.items():
+        label, costs = value[:2]
+
+        for i, cost in enumerate(costs):
+            if best_costs[i] is None or cost < best_costs[i][1]:
+                best_costs[i] = (key, cost, label, costs)
+
+    result = {}
+    for i, d in enumerate(best_costs):
+        result[f"c{i + 1}"] =[[d[2], d[3]]]
+
     return result
 
 
@@ -59,18 +75,43 @@ def get_best_bi(pareto):
 
     return result
 
+def get_best_bi_cost_only(pareto):
+    best_costs = [None] * len(next(iter(pareto.values()))["costs"])
 
-def process_files(file_paths, output_file_path, algorithm):
+    for key, value in pareto.items():
+        label = str((tuple(value["nodes"][-1][0]), tuple(value["nodes"][-1][1])))
+
+        costs = value["costs"]
+
+        for i, cost in enumerate(costs):
+            if cost is None:
+                continue
+            if best_costs[i] is None or cost < best_costs[i][1][i]:
+                best_costs[i] = [label, costs]
+
+    result = {}
+    for i, d in enumerate(best_costs):
+        result[f"c{i + 1}"] = d
+
+    return result
+
+
+def process_files(file_paths, output_file_path, algorithm, cost_only=False):
     results = {}
 
     for file_path in file_paths:
         with open(file_path, "r") as file:
             data = json.load(file)
-        if algorithm == "apx":
+        if algorithm == "apx" and not cost_only:
             bests = get_best_apx(data)
-        else:
+        elif algorithm == "apx" and cost_only:
+            bests = get_best_apx_cost_only(data)
+        elif not cost_only:
             bests = get_best_bi(data)
-        results[file_path.split("/")[-1]] = bests
+        elif cost_only:
+            bests = get_best_bi_cost_only(data)
+
+    results[file_path.split("/")[-1]] = bests
 
     with open(output_file_path, "w") as file:
         json.dump(results, file, indent=4)
@@ -95,6 +136,25 @@ def generate_excel(results, data, output_excel):
     df.to_excel(output_excel, index=False)
 
 
+def generate_excel_cost_only(results, data, output_excel):
+    data_for_excel = []
+    for filename, bests in data.items():
+        extracted_value = float(filename[3:-5])
+        # if any objevtive is None, skip
+        if any([item is None for item in bests.values()]):
+            continue
+        print(bests)
+        row_data = [
+            results[-2],
+            extracted_value,
+            bests['c1'][1][0], bests['c2'][1][1], bests['c3'][1][2]
+        ]
+        data_for_excel.append(row_data)
+
+    df = pd.DataFrame(data_for_excel, columns=["Max_length", "Epsilon", "c1", "c2", "c3"])
+    df.to_excel(output_excel, index=False)
+
+
 def generate_csv(results, data, output_csv):
     data_for_csv = []
     for filename, bests in data.items():
@@ -106,18 +166,23 @@ def generate_csv(results, data, output_csv):
 
     df = pd.DataFrame(data_for_csv, columns=["Id", "Label"])
 
-    df = sample.cal_objectives(df, "../Dataset/Kaggle/others/movie_clustered_table.csv")
+    df = sample.cal_objectives_movie(df, "../Dataset/Kaggle/others/movie_clustered_table.csv")
 
     df.to_csv(output_csv, index=False)
 
 
 def main():
-    # algorithm = "div"
-    algorithms = ["apx", "div", "no", "bi"]
+    algorithms = ["apx", "no", "bi", "div"]
     results = "../Dataset/Kaggle/results/ml6/"
+
+    if "Kaggle" in results:
+        cost_only = False
+    else:
+        cost_only = True
 
     for algorithm in algorithms:
         input_files = [results + algorithm + item for item in ["0.1.json", "0.2.json", "0.3.json", "0.4.json", "0.5.json"]]
+        # input_files = [results + algorithm + item for item in ["0.3.json"]]
         output_json = results + algorithm + "_best.json"
         output_excel = results + algorithm + "_best.xlsx"
         output_csv = results + algorithm + "_best.csv"
@@ -127,7 +192,11 @@ def main():
         with open(output_json, "r") as file:
             data = json.load(file)
 
-        generate_excel(results, data, output_excel)
+        if cost_only:
+            generate_excel_cost_only(results, data, output_excel)
+        else:
+            generate_excel(results, data, output_excel)
+
         generate_csv(results, data, output_csv)
 
 

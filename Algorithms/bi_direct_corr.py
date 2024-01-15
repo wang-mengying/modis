@@ -6,24 +6,72 @@ import pickle
 import sys
 import time
 import pandas as pd
-import Trainer.movie_gradient_boosting as mgb
+import Trainer.movie_gradient_boosting as mgb_movie
 
 import joblib
 
 from Algorithms.si_direct import get_cmin_bmax
+from Algorithms.si_direct import get_cmin
 
 sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 import Utils.correlation_analysis as correlation_analysis
 
+# Data = "../Dataset/HuggingFace/"
 Data = "../Dataset/Kaggle/"
 max_length = 2
 
 dataset = Data + "results/ml" + str(max_length) + "/"
 # dataset = dataset.replace('/', '\\')
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
-records = pd.read_csv('../Surrogate/Movie/sample_nodes.csv')
-relations = correlation_analysis.gat_relations('../Dataset/Kaggle/others/d7m8/nodes.json')
+if "Kaggle" in Data:
+    records = pd.read_csv('../Surrogate/Movie/sample_nodes.csv')
+    relations = correlation_analysis.get_relations('../Dataset/Kaggle/others/d7m8/nodes.json', 'movie')
+elif "HuggingFace" in Data:
+    records = pd.read_csv('../Surrogate/HuggingFace/sample_nodes.csv')
+    relations = correlation_analysis.gat_relations('../Dataset/HuggingFace/results/ml6/nodes.json', 'avocado')
+
+
+def cal_box_cost_only(path, epsilon, c_min):
+    box = []
+
+    # Costs
+    for i in range(len(path["costs"])):
+        box.append(0) if path["costs"][i] == 0 else \
+            box.append(math.floor(math.log(path["costs"][i] / c_min[i], 1 + epsilon[i])))
+
+    return tuple(box)
+
+
+def costs_benefits(state, model_path='../Surrogate/Movie/movie_surrogate.joblib',
+                   cluster_file=Data+'others/movie_clustered_table.csv'):
+    node = {}
+    node['Label'] = str(state)
+    df = movie_objectives.surrogate_inputs(node, cluster_file)
+
+    model = joblib.load(model_path)
+    model_objectives = list(model.predict(df)[0])
+    feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+
+    costs = [feature_objectives[2], model_objectives[0], model_objectives[2]]
+    benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1]]
+
+    return [costs, benefits]
+
+
+def cal_costs(state, model_path='../Surrogate/HuggingFace/hf_surrogate.joblib',
+                   cluster_file=Data+'clustered_table.csv'):
+    node = {}
+    node['Label'] = str(state)
+    df = movie_objectives.surrogate_inputs(node, cluster_file)
+
+    model = joblib.load(model_path)
+    model_objectives = list(model.predict(df)[0])
+
+    costs = [model_objectives[1], model_objectives[2], model_objectives[0]]
+    costs = [0.0001 if c <= 0 else c for c in costs]
+
+    return costs
 
 
 # Calculate a Box, which is a tuple of normalized costs and benefits
@@ -42,21 +90,49 @@ def cal_box(path, epsilon, c_min, b_max):
 
     return tuple(box)
 
+# def cal_box(path, epsilon, c_min):
+#     box = []
+#
+#     path["costs"] = [0.0001 if c <= 0 else c for c in path["costs"]]
+#
+#
+#     # Costs
+#     for i in range(len(path["costs"])):
+#         box.append(0) if path["costs"][i] == 0 or path["costs"][i] ==None else \
+#             box.append(math.floor(math.log(path["costs"][i] / c_min[i], 1 + epsilon[i])))
+#
+#     return tuple(box)
 
-def costs_benefits(state, model_path='../Surrogate/Kaggle/movie_surrogate.joblib',
-                   cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
-    node = {}
-    node['Label'] = str(state)
-    df = movie_objectives.surrogate_inputs(node, cluster_file)
 
-    model = joblib.load(model_path)
-    model_objectives = list(model.predict(df)[0])
-    feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+# def costs_benefits(state, model_path='../Surrogate/Kaggle/movie_surrogate.joblib',
+#                    cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
+#     node = {}
+#     node['Label'] = str(state)
+#     df = movie_objectives.surrogate_inputs(node, cluster_file)
+#
+#     model = joblib.load(model_path)
+#     model_objectives = list(model.predict(df)[0])
+#     feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+#
+#     costs = [feature_objectives[2], model_objectives[0], model_objectives[2]]
+#     benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1]]
+#
+#     return [costs, benefits]
 
-    costs = [feature_objectives[2], model_objectives[0], model_objectives[2]]
-    benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1]]
 
-    return [costs, benefits]
+# def cal_costs(state, model_path='../Surrogate/HuggingFace/hf_surrogate.joblib',
+#                    cluster_file=Data+'clustered_table.csv'):
+#     node = {}
+#     node['Label'] = str(state)
+#     df = movie_objectives.surrogate_inputs(node, cluster_file)
+#
+#     model = joblib.load(model_path)
+#     model_objectives = list(model.predict(df)[0])
+#
+#     costs = [model_objectives[1], model_objectives[2], model_objectives[0]]
+#     costs = [0.0001 if c <= 0 else c for c in costs]
+#
+#     return costs
 
 
 def costs_benefits_part(state, cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
@@ -71,6 +147,25 @@ def costs_benefits_part(state, cluster_file='../Dataset/Kaggle/others/movie_clus
     return [costs, benefits]
 
 
+def get_model_objectives(data, label):
+    """Retrieve model_objectives for a given label from the provided JSON data."""
+    for key, value in data.items():
+        if value['Label'] == label:
+            return value["model_objectives"]
+    return [None, None, None]
+
+
+def costs_part(state, data, cluster_file='../Dataset/HuggingFace/clustered_table.csv'):
+    node = {}
+    model_objectives = get_model_objectives(data, str(state))
+    mae, time = model_objectives[1], model_objectives[2]
+    # node['Label'] = str(state)
+    #
+    costs = [None, mae, time]
+
+    return costs
+
+
 def find_related_objective(obj, relations):
     related_obj = None
     for relation in relations.keys():
@@ -82,6 +177,69 @@ def find_related_objective(obj, relations):
             return related_obj
 
     return related_obj
+
+
+def fill_missing_objectives_cost_only(state, nodes_json):
+    costs = costs_part(state, nodes_json)
+    c = ['mse', 'mae', 'time']
+
+    node = {}
+    node['Label'] = str(state)
+    active_items = eval(node['Label'])[0].count(1)
+    active_clusters = eval(node['Label'])[1].count(1)
+
+    # if no missing value, return the original objectives
+    if None not in costs:
+        costs = [0.0001 if c <= 0 else c for c in costs]
+        return costs
+
+    # if the node['Label'] is in the records, fill in missing objectives by the records
+    if node['Label'] in records['Label'].values:
+        node_info = records[records['Label'] == node['Label']].iloc[0]
+        for i in range(len(c)):
+            if costs[i] is None:
+                costs[i] = node_info[c[i]]
+
+    if None not in costs:
+        return costs
+
+    # if the node['Label'] is not in the records, fill in missing objectives by the relation
+    obj_has_relation = set()
+    for relation in relations.keys():
+        obj_has_relation.add(relation[0])
+        obj_has_relation.add(relation[1])
+
+    for i in range(len(c)):
+        if costs[i] is None and c[i] in obj_has_relation:
+            # find the related objective and its value
+            related_obj = find_related_objective(c[i], relations)
+            if related_obj == 'active_items':
+                related_obj_value = active_items
+            elif related_obj == 'active_clusters':
+                related_obj_value = active_clusters
+            else:
+                related_obj_value = costs[c.index(related_obj)]
+
+            # find the closed larger and smaller values of the related objective in the records
+            larger_rows = records[records[related_obj] > related_obj_value]
+            smaller_rows = records[records[related_obj] < related_obj_value]
+
+            larger_value = larger_rows.sort_values(by=related_obj).iloc[0][c[i]] if len(larger_rows) > 0 else None
+            smaller_value = smaller_rows.sort_values(by=related_obj, ascending=False).iloc[0][c[i]] if len(
+                smaller_rows) > 0 else None
+
+            if larger_value and smaller_value:
+                costs[i] = (larger_value + smaller_value) / 2
+            elif larger_value:
+                costs[i] = larger_value
+            elif smaller_value:
+                costs[i] = smaller_value
+    if None not in costs:
+        return costs
+
+    costs = cal_costs(state)
+
+    return costs
 
 
 def fill_missing_objectives(state):
@@ -174,7 +332,10 @@ def is_dominated(b1, b2, p1, p2, epsilon):
 
     # Case 1: Same box, compare the last benefit
     if b1 == b2:
-        return p1['benefits'][-1] < p2['benefits'][-1]
+        if p1['benefits'] is None or p2['benefits'] is None:
+            return p1['costs'][-1] <= p2['costs'][-1]
+        else:
+            return p1['benefits'][-1] < p2['benefits'][-1]
 
     # Case 2: Different boxes, compare the box
     for i in range(len(b1)):
@@ -222,16 +383,16 @@ def update_pareto(pareto_set: dict, box, path, epsilon, prun_set):
     return pareto_set, added, prun_set
 
 
-def obj2cb(G, node):
-    costs = [G.nodes[node]['feature_objectives'][2],
-             G.nodes[node]['model_objectives'][0],
-             G.nodes[node]['model_objectives'][2]]
-
-    benefits = [G.nodes[node]['feature_objectives'][0],
-                G.nodes[node]['feature_objectives'][1],
-                G.nodes[node]['model_objectives'][1]]
-
-    return [costs, benefits]
+# def obj2cb(G, node):
+#     costs = [G.nodes[node]['feature_objectives'][2],
+#              G.nodes[node]['model_objectives'][0],
+#              G.nodes[node]['model_objectives'][2]]
+#
+#     benefits = [G.nodes[node]['feature_objectives'][0],
+#                 G.nodes[node]['feature_objectives'][1],
+#                 G.nodes[node]['model_objectives'][1]]
+#
+#     return [costs, benefits]
 
 
 def spawn_state(state, direction="F"):
@@ -309,7 +470,7 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, m
         # Forward exploration
         print(f"pathsF: {len(pathsF)}")
         for boxF, pathF in pathsF.items():
-            if len(pathF['nodes']) > max_length/2:
+            if len(pathF['nodes']) > max_length:
                 continue
 
             current_state = pathF['nodes'][-1]
@@ -338,7 +499,7 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, m
         # Backward exploration
         print(f"pathsB: {len(pathsB)}")
         for boxB, pathB in pathsB.items():
-            if len(pathB['nodes']) > max_length/2:
+            if len(pathB['nodes']) > max_length:
                 continue
 
             current_state = pathB['nodes'][-1]
@@ -383,7 +544,104 @@ def bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, m
     return pareto_set
 
 
-def pre_clusters(df, target):
+def bi_directional_search_state_cost_only(start_state, end_state, epsilon, c_min, max_length=20, json_file='../Dataset/HuggingFace/results/ml6/nodes.json'):
+    pareto_set = {}
+    sandwich_bounds = set()
+    prun_set = set()
+    with open(json_file, 'r') as file:
+        nodes_json = json.load(file)
+
+    fs_path = {'nodes': [start_state],
+               'costs': cal_costs(start_state)}
+    bs_path = {'nodes': [end_state],
+               'costs': 0}
+
+    pathsF = {str(cal_box_cost_only(fs_path, epsilon, c_min)): fs_path}
+    pathsB = {str((0, 0, 0, 0, 0, 0)): bs_path}
+
+    while pathsF or pathsB:
+        new_pathsF = {}
+        new_pathsB = {}
+
+        # Forward exploration
+        print(f"pathsF: {len(pathsF)}")
+        for boxF, pathF in pathsF.items():
+            if len(pathF['nodes']) > max_length:
+                continue
+
+            current_state = pathF['nodes'][-1]
+            print(current_state)
+
+            next_states = spawn_state(current_state, direction="F")
+            for next_state in next_states:
+                new_path = {'nodes': pathF['nodes'] + [next_state],
+                            'costs': fill_missing_objectives_cost_only(next_state, nodes_json)}
+                box = str(cal_box_cost_only(new_path, epsilon, c_min))
+                if box in prun_set:
+                    continue
+
+                prun = False
+                for bound in sandwich_bounds:
+                    if is_dominated(box, bound[1], new_path, pareto_set.get(bound[1], None), epsilon) and \
+                            is_dominated(bound[0], box, pareto_set.get(bound[0], None), new_path, epsilon):
+                        prun = True
+                        break
+                if not prun:
+                    pareto_set, added, prun_set = update_pareto(pareto_set, box, new_path, epsilon, prun_set)
+                    if added:
+                        new_pathsF[box] = new_path
+
+        # Backward exploration
+        print(f"pathsB: {len(pathsB)}")
+        for boxB, pathB in pathsB.items():
+            if len(pathB['nodes']) > max_length:
+                continue
+
+            current_state = pathB['nodes'][-1]
+            print(current_state)
+
+            next_states = spawn_state(current_state, direction="B")
+            for next_state in next_states:
+                new_path = {'nodes': pathB['nodes'] + [next_state],
+                            'costs': fill_missing_objectives_cost_only(next_state, nodes_json)}
+                box = str(cal_box_cost_only(new_path, epsilon, c_min))
+                if box in prun_set:
+                    continue
+
+                prun = False
+                for bound in sandwich_bounds:
+                    if is_dominated(box, bound[1], new_path, pareto_set.get(bound[1], None), epsilon) and \
+                            is_dominated(bound[0], box, pareto_set.get(bound[0], None), new_path, epsilon):
+                        prun = True
+                        break
+                if not prun:
+                    pareto_set, added, prun_set = update_pareto(pareto_set, box, new_path, epsilon, prun_set)
+                    if added:
+                        new_pathsB[box] = new_path
+
+        # Termination condition
+        if set(pathF['nodes'][-1] for pathF in pathsF.values()) & set(pathB['nodes'][-1] for pathB in pathsB.values()):
+            break
+
+        # Update sandwich bounds
+        for boxF, pathF in new_pathsF.items():
+            for boxB, pathB in new_pathsB.items():
+                # check the last element of the box to ensure them in the same layer on the most important objective
+                if is_dominated(boxF, boxB, pathF, pathB, epsilon) and boxF[-1] == boxB[-1]:
+                    sandwich_bounds.add((boxF, boxB))
+                elif is_dominated(boxB, boxF, pathB, pathF, epsilon) and boxB[-1] == boxF[-1]:
+                    sandwich_bounds.add((boxB, boxF))
+
+        pathsF = new_pathsF
+        pathsB = new_pathsB
+
+    return pareto_set
+
+
+def pre_clusters(df, target, classif=True):
+    if not classif:
+        return df['cluster'].value_counts().head(2).index.tolist()
+
     classes = df[target].unique()
     clusters = {}
 
@@ -395,35 +653,44 @@ def pre_clusters(df, target):
 
 
 def main():
-    G = pickle.load(open(Data + 'others/d7m8/costs.gpickle', 'rb'))
-    #
+    G = pickle.load(open(Data + "results/ml" + str(max_length) + "/costs.gpickle", 'rb'))
+
     # start_node = 0
     # end_node = 37653
-    e = 0.1
-
+    e = 0.5
     # epsilon = [e] * 5 + [0.0001]
     epsilon = [e] * 6
-    c_min, b_max = get_cmin_bmax(G)
 
-    clusters = pd.read_csv(Data + 'others/movie_clustered_table.csv')
-    clusters = mgb.preprocess_data(clusters)
-    pre = pre_clusters(clusters, 'gross_class')
-    indices = [pre[i] for i in pre.keys()]
+    if "Kaggle" in Data:
+        c_min, b_max = get_cmin_bmax(G)
+        clusters = pd.read_csv(Data + 'others/movie_clustered_table.csv')
+        clusters = mgb_movie.preprocess_data(clusters)
+        pre = pre_clusters(clusters, 'gross_class')
+        indices = [pre[i] for i in pre.keys()]
 
-    start_state = (tuple([1] * 11), tuple([1] * 11))
-    end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
+        start_state = (tuple([1] * 11), tuple([1] * 11))
+        end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
 
-    start_time = time.time()
-    # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
-    pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
-    end_time = time.time()
+        start_time = time.time()
+        # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
+        pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+        end_time = time.time()
+    elif "HuggingFace" in Data:
+        c_min = get_cmin(G)
+
+    # clusters = pd.read_csv(Data + 'clustered_table.csv')
+    # start_state = (tuple([1] * 12), tuple([1] * 10))
+    # end_state = (tuple([0] * 12), tuple([0] * 10))
+    # start_time = time.time()
+    # pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, max_length)
+    # end_time = time.time()
 
     logging.info(f"epsilon: {epsilon}")
     logging.info(f"max_length: {max_length}")
     logging.info(f"Search time: {end_time - start_time}")
     logging.info(f"Pareto set size: {len(pareto)}")
     pareto_json = json.dumps(pareto, indent=4)
-    with open(dataset + '/no' + str(e) + '.json', 'w') as json_file:
+    with open(dataset + '/bi' + str(e) + '.json', 'w') as json_file:
         json_file.write(pareto_json)
 
 

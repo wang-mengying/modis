@@ -16,7 +16,7 @@ sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
 Data = "../Dataset/Kaggle/"
-max_length = 6
+max_length = 2
 
 dataset = Data + "results/ml" + str(max_length) + "/"
 # dataset = dataset.replace('/', '\\')
@@ -113,6 +113,16 @@ def get_cmin_bmax(G):
     return c_min, b_max
 
 
+def get_cmin(G):
+    model_objectives_mins = [min(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
+
+    c_min = [model_objectives_mins[1], model_objectives_mins[2], model_objectives_mins[0]]
+    # set c_min[i] to 0.0001 if c_min <= 0
+    c_min = [0.0001 if c <= 0 else c for c in c_min]
+
+    return c_min
+
+
 def pos(q: tuple, r: list, c_min, b_max):
     pos_q = []
 
@@ -193,11 +203,12 @@ def merge(D, node, pos_q, path):
 
 
 def main():
-    epsilon = 0.4
+    epsilon = 0.1
     logging.info(f"epsilon: {epsilon}")
     logging.info(f"max_length: {max_length}")
     r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1]
     t = [5, 1.5, 555]
+    # t = [500, 150, 5550]
 
     # model_path = '../Surrogate/Movie/movie_surrogate.joblib'.replace("/", "\\")
     #
@@ -220,8 +231,6 @@ def main():
     end = time.time()
     logging.info(f"ApxMODis Search Time: {end - start}")
 
-    # with open(dataset + 'pareto_old.json', "r") as file:
-    #     pareto_dict = json.load(file)
     pareto_dict = dict(pareto_set)
     # pareto_json = json.dumps(pareto_dict, indent=4)
     # with open(dataset + 'si_pareto_' + str(epsilon) + '.json', 'w') as json_file:
@@ -238,7 +247,6 @@ def main():
     with open(dataset + 'apx' + str(epsilon) + '.json', 'w') as json_file:
         json_file.write(pareto_json)
 
-    # pareto_size = sum(len(value.keys()) for value in pareto_dict.values())
     pareto_size = len(pareto)
     logging.info(f"Pareto Set Size: {pareto_size}")
 

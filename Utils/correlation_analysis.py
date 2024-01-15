@@ -8,7 +8,7 @@ def active_counts(label_str):
     return active_items, active_clusters
 
 
-def preprocessing(json_file):
+def preprocessing_movie(json_file):
     with open(json_file, 'r') as f:
         nodes_data = json.load(f)
 
@@ -28,8 +28,28 @@ def preprocessing(json_file):
     return df
 
 
-def gat_relations(json_file, threshold=0.8):
-    df = preprocessing(json_file)
+def preprocessing_avocado(json_file):
+    with open(json_file, 'r') as f:
+        nodes_data = json.load(f)
+
+    active_items_list, active_clusters_list = zip(*[active_counts(node_info['Label']) for node_info in nodes_data.values()])
+    data = {
+        'mse': [node_info['model_objectives'][0] for node_info in nodes_data.values()],
+        'mae': [node_info['model_objectives'][1] for node_info in nodes_data.values()],
+        'time': [node_info['model_objectives'][2] for node_info in nodes_data.values()],
+        'active_items': active_items_list,
+        'active_clusters': active_clusters_list
+    }
+    df = pd.DataFrame(data)
+
+    return df
+
+
+def get_relations(json_file, task, threshold=0.8):
+    if task == 'movie':
+        df = preprocessing_movie(json_file)
+    elif task == 'avocado':
+        df = preprocessing_avocado(json_file)
 
     objectives = df.columns
     correlation_matrix = df.corr(method='spearman')
@@ -45,9 +65,10 @@ def gat_relations(json_file, threshold=0.8):
 
 
 def main():
-    json_file = '../Dataset/Kaggle/others/d7m8/nodes.json'
+    # json_file = '../Dataset/Kaggle/others/d7m8/nodes.json'
+    json_file = '../Dataset/HuggingFace/results/ml2/nodes.json'
 
-    strong_relations = gat_relations(json_file)
+    strong_relations = gat_relations(json_file, 'avocado')
     print(strong_relations)
 
 
