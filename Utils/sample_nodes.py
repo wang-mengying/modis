@@ -8,6 +8,7 @@ sys.path.append("../")
 import Trainer.movie_gradient_boosting as mgb
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 import Trainer.avocado_linear_regression as alr
+import Trainer.school_logistic_regression as slr
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -18,7 +19,7 @@ def extract_counts(label):
     return sum(items), sum(values)
 
 
-def get_sample(df, n_samples=5):
+def get_sample(df, n_samples=300):
     df[['active_items', 'active_values']] = df['Label'].apply(extract_counts).apply(pd.Series)
     df['stratum'] = df['active_items'].astype(str) + '-' + df['active_values'].astype(str)
 
@@ -127,6 +128,7 @@ def cal_objectives_avocado(df_sample, original_file, clustered_file):
 
     return df_sample
 
+
 def cal_objectives_house(df_sample, original_file, clustered_file):
     df_sample['num_rows'] = 0
     df_sample['num_cols'] = 0
@@ -145,7 +147,6 @@ def cal_objectives_house(df_sample, original_file, clustered_file):
         df_sample.loc[i, 'num_rows'] = df.shape[0]
         df_sample.loc[i, 'num_cols'] = df.shape[1]
 
-        df = pd.read_csv(original_file)
         X, y, _ = house_random_forest.process_data(df)
 
         try:
@@ -160,6 +161,40 @@ def cal_objectives_house(df_sample, original_file, clustered_file):
         df_sample.loc[i, 'training_time'] = training_time
 
     return df_sample
+
+
+def cal_objectives_school(df_sample, original_file, clustered_file):
+    df_sample['num_rows'] = 0
+    df_sample['num_cols'] = 0
+
+    df_sample['accuracy'] = 0.0
+    df_sample['f1'] = 0.0
+    df_sample['training_time'] = 0.0
+
+    for i, row in df_sample.iterrows():
+        node_id = row['Id']
+        print(f"Processing node {node_id}.")
+
+        node_label = row['Label']
+        df = process_data(node_label, clustered_file)
+
+        df_sample.loc[i, 'num_rows'] = df.shape[0]
+        df_sample.loc[i, 'num_cols'] = df.shape[1]
+
+        preprocessor = slr.preprocess_data_with_mapper(df)
+        try:
+            f1, accuracy, training_time = slr.train_and_evaluate_model(df)
+        except Exception as e:
+            print(f"Error raised. {e}")
+            f1, accuracy, training_time = 0.0, 0.0, 0.0
+            continue
+
+        df_sample.loc[i, 'accuracy'] = accuracy
+        df_sample.loc[i, 'f1'] = f1
+        df_sample.loc[i, 'training_time'] = training_time
+
+    return df_sample
+
 
 def movie():
     dataset = "../Dataset/Kaggle/"
@@ -188,15 +223,14 @@ def avocado():
 
     print("Start training ......")
     sample = cal_objectives_avocado(sample, dataset + 'extra/avocado_full.csv',
-                                    dataset + 'clustered_table.csv')
-
+                                    dataset + 'house_clustered.csv')
 
     sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
 
 
-def house():
-    dataset = "../Dataset/House/"
-    surrogate = "../Surrogate/House/"
+def opendata(topic, original_file, clustered_file):
+    dataset = "../Dataset/OpenData/" + topic + "/"
+    surrogate = "../Surrogate/" + topic + "/"
     df = pd.read_csv(dataset + 'results/ml6/nodes.csv')
 
     print("Sampling ......")
@@ -204,16 +238,24 @@ def house():
     sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
 
     print("Start training ......")
-    sample = cal_objectives_house(sample, dataset + 'housing.csv',
-                                        dataset + 'clustered_table.csv')
+    if topic == "School":
+        sample = cal_objectives_school(sample, dataset + original_file, dataset + clustered_file)
+    elif topic == "House":
+        sample = cal_objectives_house(sample, dataset + original_file, dataset + clustered_file)
 
     sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
 
 
 def main():
-    # movie()
-    # avocado()
-    house()
+    topic = "House"
+    if topic == "Movie":
+        movie()
+    elif topic == "Avocado":
+        avocado()
+    elif topic == "House":
+        opendata(topic, "processed/house_filtered.csv", "processed/house_clustered.csv")
+    elif topic == "School":
+        opendata(topic, "processed/school_filtered.csv", "processed/school_clustered.csv")
 
 
 if __name__ == '__main__':

@@ -31,18 +31,20 @@ def igraph_table(L, k, d, m):
 
     # states from "drop"
     drop_states = sum(comb(n, i) for i in range(math.floor(d * n), n + 1))
+    print(math.floor(d * n), n + 1)
 
     # states from "modify"
     modify_states = sum(comb(k, i) for i in range(math.ceil(m * k), k + 1))
+    print(math.ceil(m * k), k + 1)
 
     total = drop_states * modify_states
 
     return int(total)
 
 
-schema = [5, 5, 8, 5, 5, 5, 5, 5, 5, 5, 5]
-cluster = 11
+schema = [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7]
+cluster = 7
 
-print(igraph_add(schema), igraph_drop(schema), igraph_table(schema, cluster, 0.7, 0.8))
+print(igraph_table(schema, cluster, 0.8, 0.8))
 
 # 2824752490, 2792361600, 130384

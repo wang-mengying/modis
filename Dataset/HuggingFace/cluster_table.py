@@ -35,4 +35,4 @@ clusters, labels = optimal_kmeans(data, max_clusters)
 data['cluster'] = labels
 print(clusters) #(10, 12)
 
-data.to_csv('clustered_table.csv', index=False)
+data.to_csv('house_clustered.csv', index=False)

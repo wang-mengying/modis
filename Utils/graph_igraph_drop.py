@@ -85,10 +85,10 @@ def main():
     # print("Keys:", features)
     # print("Values:", L)
 
-    print('Constructing graph ......')
+    print('Constructing results ......')
     G, state_to_id = generate_graph(L)
 
-    print('Exporting graph into CSV files......')
+    print('Exporting results into CSV files......')
     export_to_csv(G, state_to_id, '../Example/medium/drop/')
 
 

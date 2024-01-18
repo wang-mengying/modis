@@ -56,10 +56,10 @@ def preprocess_data(df):
             df = bin_enc.fit_transform(df)
 
     # Multi-label binarization for 'genres' and 'director_professions'
-    # multi_encode = ['genres', 'director_professions']
-    # for column in multi_encode:
-    #     if column in df.columns:
-    #         df = multi_label_binarization(df, column)
+    multi_encode = ['genres', 'director_professions']
+    for column in multi_encode:
+        if column in df.columns:
+            df = multi_label_binarization(df, column)
 
     # Group 'worldwide_gross' and trans it into a classification problem
     bins = [0, 50000000, 150000000, np.inf]
@@ -118,9 +118,9 @@ def feature_objs(df):
 def main():
     start = time.time()
     dataset_path = "../Baselines/Movie/"
-    # filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
-    filename = sys.argv[1] if len(sys.argv) > 1 else 'h2o.csv'
-    path = dataset_path + filename
+    filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
+    # filename = sys.argv[1] if len(sys.argv) > 1 else 'metam_mult.csv'
+    # path = dataset_path + filename
     path = "../Dataset/Kaggle/processed/movie_filtered.csv"
     df = pd.read_csv(path)
     # print(df.head())

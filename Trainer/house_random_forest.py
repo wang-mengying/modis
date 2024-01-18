@@ -31,10 +31,17 @@ def process_data(housing_data):
     medium_threshold = housing_data['PRICE'].quantile(0.66)
     housing_data['PRICE_CLASS'] = housing_data['PRICE'].apply(lambda x: 'Low' if x <= low_threshold else ('Medium' if x <= medium_threshold else 'High'))
 
+    cat_cols = ['SALE TYPE', 'CITY', 'STATE OR PROVINCE', 'ZIP OR POSTAL CODE', 'SOURCE', 'FAVORITE', 'INTERESTED', 'LOCATION', 'STATUS']
+    for col in cat_cols:
+        try:
+            mapper = {k: v for v, k in enumerate(housing_data[col].unique())}
+            housing_data[col] = housing_data[col].map(mapper)
+        except:
+            pass
+
     # Drop unnecessary columns and encode categorical columns
-    cols_to_drop = ['SALE TYPE', 'ADDRESS', 'CITY', 'STATE OR PROVINCE', 'ZIP OR POSTAL CODE',
-                    'URL (SEE https://www.redfin.com/buy-a-home/comparative-market-analysis FOR INFO ON PRICING)', 
-                    'SOURCE', 'MLS#', 'FAVORITE', 'INTERESTED', 'PRICE', 'LOCATION', 'STATUS']
+    cols_to_drop = ['ADDRESS', 'URL (SEE https://www.redfin.com/buy-a-home/comparative-market-analysis FOR INFO ON PRICING)',
+                    'MLS#', 'PRICE']
     housing_data = housing_data.drop(columns=cols_to_drop, errors='ignore')
     housing_data_encoded = pd.get_dummies(housing_data, drop_first=True)
     
@@ -61,8 +68,8 @@ def train_and_save_model(X, y):
 
 
 def main():
-    filepath = "../Dataset/House/housing.csv"
-    # filepath = "../Baselines/House/metam.csv"
+    filepath = "../Dataset/OpenData/House/processed/house_filtered.csv"
+    # filepath = "../Baselines/House/metam_mult.csv"
     housing_data = pd.read_csv(filepath)
 
     X, y, original_size = process_data(housing_data)

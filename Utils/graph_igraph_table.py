@@ -3,7 +3,6 @@ import math
 import csv
 import time
 
-
 def generate_graph(features, clusters, t_drop=0.7, t_modify=0.8, max_depth=2):
     graph = Graph(directed=True)
     state_to_id = {}
@@ -60,14 +59,42 @@ def generate_graph(features, clusters, t_drop=0.7, t_modify=0.8, max_depth=2):
     return graph, state_to_id
 
 
+def pad_tuple(input_str):
+    # Remove unwanted whitespaces and line breaks
+    cleaned_str = ''.join(input_str.split())
+
+    # Convert string representation of tuple to actual tuple
+    try:
+        input_tuple = eval(cleaned_str, {"__builtins__": None}, {})
+    except (SyntaxError, NameError):
+        raise ValueError("Invalid tuple format")
+
+    # Function to pad inner tuples
+    def pad_inner_tuple(inner_tuple):
+        return inner_tuple + (0,) * (11 - len(inner_tuple))
+
+    # Pad each inner tuple
+    padded_tuples = tuple(pad_inner_tuple(inner_tuple) for inner_tuple in input_tuple)
+
+    return padded_tuples
+
+
 def main():
-    features = 20
-    clusters = 7
+    features = 2
+    clusters = 10
+    max_length = 6
+    scale = True
     start = time.time()
-    graph, state_to_id = generate_graph(features, clusters)
+    # graph, state_to_id = generate_graph(features, clusters)
+    if features == 6 and clusters == 12:
+        graph, state_to_id = generate_graph(features, clusters, 0.5, 0.5, max_length)
+    elif features == 20 and clusters == 7:
+        graph, state_to_id = generate_graph(features, clusters, 0.75, 0.8, max_length)
+    else:
+        graph, state_to_id = generate_graph(features, clusters, max_depth=max_length)
     end = time.time()
     print(end - start)
-    dataset = "../Dataset/House/results/ml6/"
+    dataset = "../Dataset/Scale/0210/"
     # dataset = "../Example/small/t_cluster/maxl/"
 
     # Nodes
@@ -75,7 +102,10 @@ def main():
         writer = csv.writer(csvfile)
         writer.writerow(['Id', 'Label'])
         for v in graph.vs:
-            writer.writerow([v.index, v['label']])
+            if not scale:
+                writer.writerow([v.index, v['label']])
+            else:
+                writer.writerow([v.index, pad_tuple(v['label'])])
 
     # Edges
     with open(dataset + 'edges.csv', 'w', newline='') as csvfile:

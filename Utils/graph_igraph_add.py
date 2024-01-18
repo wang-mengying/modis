@@ -29,7 +29,7 @@ def get_vertex_id(state):
     return state_to_id[state]
 
 
-# Add edges to the graph recursively
+# Add edges to the results recursively
 def add_edges(G, current_node):
     current_id = get_vertex_id(current_node)
     for i, item in enumerate(current_node):
@@ -76,16 +76,16 @@ def export_csv(G, path="../Example/"):
 def main():
     source_node = tuple((0, ()) for _ in L)
 
-    print('Constructing graph ......')
+    print('Constructing results ......')
     add_edges(G, source_node)
 
     export_csv(G)
 
-    # print('Exporting graph into CSV files......')
+    # print('Exporting results into CSV files......')
     # export_csv(G, dataset)
     #
-    # print('Exporting graph into Graphml......')
-    # G.write_graphml(dataset + "graph.graphml")
+    # print('Exporting results into Graphml......')
+    # G.write_graphml(dataset + "results.graphml")
 
 
 if __name__ == '__main__':

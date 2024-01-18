@@ -33,5 +33,5 @@ for key, value in pareto_json.items():
                          value["costs"][0], value["costs"][1], value["costs"][2]])
 
 df = pd.DataFrame(data_for_csv, columns=["Epsilon", "Label", "MSE", "MAE", "Time"])
-# df = sample.cal_objectives_avocado(df, "../Dataset/HuggingFace/clustered_table.csv")
+# df = sample.cal_objectives_avocado(df, "../Dataset/HuggingFace/house_clustered.csv")
 df.to_csv("hf/no.csv", mode='a', index=False)

@@ -68,7 +68,7 @@ def main():
     # json_file = '../Dataset/Kaggle/others/d7m8/nodes.json'
     json_file = '../Dataset/HuggingFace/results/ml2/nodes.json'
 
-    strong_relations = gat_relations(json_file, 'avocado')
+    strong_relations = get_relations(json_file, 'avocado')
     print(strong_relations)
 
 

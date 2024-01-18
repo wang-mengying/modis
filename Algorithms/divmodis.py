@@ -11,7 +11,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import si_direct as single
 import divmodis_solo as solo
 
-logging.basicConfig(filename='../Dataset/Kaggle/log.txt', level=logging.INFO, format='%(message)s')
+Data = "../Dataset/Scale/"
+logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 
 
 def get_pivot(pareto, n, c_min, b_max, c_max, b_min, r, a=0.5):
@@ -166,14 +167,15 @@ def average_distance_cost_only(nodes, pareto, c_min,c_max, r, a=0.5):
 
 
 def main():
-    length = 2
-    epsilon = 0.1
-    algorithm = "bi"
-    size = 2
-    cost_only = True
+    length = 6
+    epsilon = 0.2
+    algorithm = "no"
+    size = 3
+    cost_only = False
     r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
-    dataset = "../Dataset/Kaggle/results/ml" + str(length) + "/"
-    # dataset = dataset.replace('/', '\\')
+    dataset = Data + "0611/"
+    # dataset = Data + "results/ml" + str(max_length) + "/"
+    dataset = dataset.replace('/', '\\')
     logging.info(f"epsilon: {epsilon}")
     logging.info(f"max_length: {length}")
     logging.info(f"cardinality: {size}")
@@ -183,8 +185,8 @@ def main():
         pareto = json.load(file)
 
     G = pickle.load(open('../Dataset/Kaggle/results/ml6/costs.gpickle', 'rb'))
-    if "Kaggle" in dataset:
-        cost_only = False
+    if "HuggingFace" in dataset:
+        cost_only = True
 
     if not cost_only:
         c_min, b_max = single.get_cmin_bmax(G)

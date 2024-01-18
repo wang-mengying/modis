@@ -15,11 +15,11 @@ from multiprocessing import Pool
 sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
-Data = "../Dataset/Kaggle/"
-max_length = 2
-
-dataset = Data + "results/ml" + str(max_length) + "/"
-# dataset = dataset.replace('/', '\\')
+Data = "../Dataset/Scale/"
+max_length = 6
+dataset = Data + "1011/"
+# dataset = Data + "results/ml" + str(max_length) + "/"
+dataset = dataset.replace('/', '\\')
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 nodes_df = pd.read_csv(dataset + 'nodes.csv')
 edges_df = pd.read_csv(dataset + 'edges.csv')
@@ -36,7 +36,7 @@ def worker_initializer(model_path):
     surrogate_model = joblib.load(model_path)
 
 
-def get_objectives(node_id, model, cluster_file=Data+'others/movie_clustered_table.csv'):
+def get_objectives(node_id, model, cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
     # cluster_file = cluster_file.replace('/', '\\')
     node = G.nodes[node_id]
     df = movie_objectives.surrogate_inputs(node, cluster_file)
@@ -203,28 +203,28 @@ def merge(D, node, pos_q, path):
 
 
 def main():
-    epsilon = 0.1
+    epsilon = 0.2
     logging.info(f"epsilon: {epsilon}")
     logging.info(f"max_length: {max_length}")
     r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1]
     t = [5, 1.5, 555]
     # t = [500, 150, 5550]
 
-    # model_path = '../Surrogate/Movie/movie_surrogate.joblib'.replace("/", "\\")
-    #
-    # start = time.time()
-    # logging.info("Nodes objectives...")
-    # nodes_objectives(G, model_path)
-    # pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
-    # logging.info("Edges costs/benefits...")
-    # costs_benefits(G)
-    # end = time.time()
-    # logging.info(f"Cost/Benefit Calculation Time: {end - start}")
-    # pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
+    model_path = '../Surrogate/Movie/movie_surrogate.joblib'.replace("/", "\\")
 
-    G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
+    start = time.time()
+    logging.info("Nodes objectives...")
+    nodes_objectives(G, model_path)
+    pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
+    logging.info("Edges costs/benefits...")
+    costs_benefits(G)
+    end = time.time()
+    logging.info(f"Cost/Benefit Calculation Time: {end - start}")
+    pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
+
+    # G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
     c_min, b_max = get_cmin_bmax(G)
-    # logging.info(f"c_min: {c_min}, b_max: {b_max}")
+    logging.info(f"c_min: {c_min}, b_max: {b_max}")
     logging.info("Getting pareto set...")
     start = time.time()
     pareto_set = get_pareto(G, 0, r, t, c_min, b_max, max_length)

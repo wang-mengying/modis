@@ -36,7 +36,7 @@ def worker_initializer(model_path):
     surrogate_model = joblib.load(model_path)
 
 
-# def get_objectives(node_id, model, cluster_file=Data+'clustered_table.csv'):
+# def get_objectives(node_id, model, cluster_file=Data+'house_clustered.csv'):
 #     # cluster_file = cluster_file.replace('/', '\\')
 #     node = G.nodes[node_id]
 #     df = movie_objectives.surrogate_inputs(node, cluster_file)
@@ -46,7 +46,7 @@ def worker_initializer(model_path):
 #     return list(model_objectives), feature_objectives
 
 
-def get_objectives(node_id, model, cluster_file=Data+'clustered_table.csv'):
+def get_objectives(node_id, model, cluster_file=Data+'house_clustered.csv'):
     # cluster_file = cluster_file.replace('/', '\\')
     node = G.nodes[node_id]
     df = movie_objectives.surrogate_inputs(node, cluster_file)
@@ -285,7 +285,7 @@ def main():
     r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1]
     t = [0.4, 0.065, 0.25]
 
-    # Construct cost/benefit graph
+    # Construct cost/benefit results
     start = time.time()
     logging.info("Nodes objectives...")
     nodes_objectives(G, model_path)

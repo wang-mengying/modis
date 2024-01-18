@@ -9,17 +9,18 @@ import joblib
 import pandas as pd
 import Trainer.movie_gradient_boosting as mgb_movie
 
-from Algorithms.si_direct import get_cmin_bmax
-from Algorithms.si_direct import get_cmin
+from Algorithms.si_direct import get_cmin_bmax, get_cmin
+from Utils.graph_igraph_table import pad_tuple
 
 sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
-Data = "../Dataset/Kaggle/"
-max_length = 2
+Data = "../Dataset/Scale/"
+max_length = 10
 
-dataset = Data + "results/ml" + str(max_length) + "/"
-# dataset = dataset.replace('/', '\\')
+dataset = Data + "1108/"
+# dataset = Data + "results/ml" + str(max_length) + "/"
+dataset = dataset.replace('/', '\\')
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 
 
@@ -52,9 +53,10 @@ def cal_box_cost_only(path, epsilon, c_min):
 
 
 def costs_benefits(state, model_path='../Surrogate/Movie/movie_surrogate.joblib',
-                   cluster_file=Data+'others/movie_clustered_table.csv'):
+                   cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
     node = {}
-    node['Label'] = str(state)
+    node['Label'] = str(pad_tuple(str(state)))
+    # node['Label'] = str(state)
     df = movie_objectives.surrogate_inputs(node, cluster_file)
 
     model = joblib.load(model_path)
@@ -525,23 +527,25 @@ def pre_clusters(df, target, classif=True):
 
 
 def main():
-    G = pickle.load(open(Data + "results/ml" + str(max_length) + "/costs.gpickle", 'rb'))
+    G = pickle.load(open('../Dataset/Kaggle/results/ml6/costs.gpickle', 'rb'))
 
     # start_node = 0
     # end_node = 37653
-    e = 0.5
+    e = 0.2
     # epsilon = [e] * 5 + [0.0001]
     epsilon = [e] * 6
+    feature = 11
+    cluster = 10
 
-    if "Kaggle" in Data:
+    if "Kaggle" or "Scale" in Data:
         c_min, b_max = get_cmin_bmax(G)
-        clusters = pd.read_csv(Data + 'others/movie_clustered_table.csv')
+        clusters = pd.read_csv('../Dataset/Kaggle/others/movie_clustered_table.csv')
         clusters = mgb_movie.preprocess_data(clusters)
         pre = pre_clusters(clusters, 'gross_class')
         indices = [pre[i] for i in pre.keys()]
 
-        start_state = (tuple([1] * 11), tuple([1] * 11))
-        end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
+        start_state = (tuple([1] * feature), tuple([1] * cluster))
+        end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
 
         start_time = time.time()
         # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
