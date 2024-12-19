@@ -4,6 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score
 import time
+import Utils.objectives as objectives
 
 def process_data(housing_data):
     # Load the data
@@ -50,6 +51,7 @@ def process_data(housing_data):
     
     return X, y, original_size
 
+
 def train_and_save_model(X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
     
@@ -67,18 +69,30 @@ def train_and_save_model(X, y):
     return accuracy, f1, end_time - start_time
 
 
+def feature_objs(X, y):
+    df = pd.concat([X, y], axis=1)
+
+    fisher = objectives.fisher_score(X, df['PRICE_CLASS'])
+    mi = objectives.mutual_info(X, df['PRICE_CLASS'], regression=False)
+
+    return fisher, mi
+
+
 def main():
-    filepath = "../Dataset/OpenData/House/processed/house_filtered.csv"
-    # filepath = "../Baselines/House/metam_mult.csv"
+    # filepath = "../Dataset/OpenData/House/processed/house_original.csv"
+    filepath = "../Baselines/House/sksfm.csv"
     housing_data = pd.read_csv(filepath)
 
     X, y, original_size = process_data(housing_data)
     accuracy, f1, training_time = train_and_save_model(X, y)
+    fisher, mi = feature_objs(X, y)
 
     print(f"Original File Size: {original_size[0]} rows, {original_size[1]} columns")
     print(f"Accuracy: {accuracy:.4f}")
     print(f"F1-Score: {f1:.4f}")
     print(f"Training Time: {training_time:.2f} seconds")
+    print(f"Fisher Score: {fisher:.4f}")
+    print(f"Mutual Information: {mi:.4f}")
 
 
 if __name__ == '__main__':

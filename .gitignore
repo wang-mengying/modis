@@ -197,9 +197,12 @@ datasets/
 .DS_Store
 *.csv
 Dataset/*/*.csv
+Dataset/*/*.xlsx
+Dataset/*/*.json
 *.json
 log.txt
 Baselines/
 AutoML/
 results/*
 si_direct_backup.py
+*/note.txt

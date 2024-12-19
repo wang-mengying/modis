@@ -19,7 +19,7 @@ def extract_counts(label):
     return sum(items), sum(values)
 
 
-def get_sample(df, n_samples=300):
+def get_sample(df, n_samples=10000):
     df[['active_items', 'active_values']] = df['Label'].apply(extract_counts).apply(pd.Series)
     df['stratum'] = df['active_items'].astype(str) + '-' + df['active_values'].astype(str)
 
@@ -136,6 +136,8 @@ def cal_objectives_house(df_sample, original_file, clustered_file):
     df_sample['accuracy'] = 0.0
     df_sample['f1'] = 0.0
     df_sample['training_time'] = 0.0
+    df_sample['fisher'] = 0.0
+    df_sample['mutual_info'] = 0.0
 
     for i, row in df_sample.iterrows():
         node_id = row['Id']
@@ -156,9 +158,13 @@ def cal_objectives_house(df_sample, original_file, clustered_file):
             accuracy, f1, training_time = 0.0, 0.0, 0.0
             continue
 
+        fisher, mi = house_random_forest.feature_objs(X, y)
+
         df_sample.loc[i, 'accuracy'] = accuracy
         df_sample.loc[i, 'f1'] = f1
         df_sample.loc[i, 'training_time'] = training_time
+        df_sample.loc[i, 'fisher'] = fisher
+        df_sample.loc[i, 'mutual_info'] = mi
 
     return df_sample
 

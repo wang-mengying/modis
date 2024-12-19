@@ -11,7 +11,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import si_direct as single
 import divmodis_solo as solo
 
-Data = "../Dataset/Scale/"
+Data = "../Dataset/HuggingFace/"
+# Data = "../Dataset/OpenData/House/"
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 
 
@@ -79,8 +80,8 @@ def get_pivot_cost_only(pareto, n, c_min, c_max, r, a=0.5):
                 set1 = [node_pos for node_pos in sp]
                 set2 = [node_pos for node_pos in sp_temp]
 
-                distance1 = average_distance(set1, pareto, c_min, c_max, r, a)
-                distance2 = average_distance(set2, pareto, c_min, c_max, r, a)
+                distance1 = average_distance_cost_only(set1, pareto, c_min, c_max, r, a)
+                distance2 = average_distance_cost_only(set2, pareto, c_min, c_max, r, a)
 
                 if distance2 > distance1:
                     sp = sp_temp
@@ -167,14 +168,15 @@ def average_distance_cost_only(nodes, pareto, c_min,c_max, r, a=0.5):
 
 
 def main():
-    length = 6
-    epsilon = 0.2
+    length = 3
+    epsilon = 0.1
     algorithm = "no"
-    size = 3
+    size = 5
     cost_only = False
-    r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
-    dataset = Data + "0611/"
-    # dataset = Data + "results/ml" + str(max_length) + "/"
+    # r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
+    # r = [1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
+    # dataset = Data + "0611/"
+    dataset = Data + "results/ml" + str(length) + "/"
     dataset = dataset.replace('/', '\\')
     logging.info(f"epsilon: {epsilon}")
     logging.info(f"max_length: {length}")
@@ -184,7 +186,7 @@ def main():
     with open(nodes_file, "r") as file:
         pareto = json.load(file)
 
-    G = pickle.load(open('../Dataset/Kaggle/results/ml6/costs.gpickle', 'rb'))
+    G = pickle.load(open(Data + '/results/ml6/costs.gpickle', 'rb'))
     if "HuggingFace" in dataset:
         cost_only = True
 
@@ -201,6 +203,7 @@ def main():
         c_min, c_max = solo.get_cmax_min(G)
         print("Getting pivot set...")
         start = time.time()
+        r = [1 + epsilon, 1 + epsilon, 1 + epsilon]
         pivot = get_pivot_cost_only(pareto, size, c_min, c_max, r)
         end = time.time()
         logging.info(f"Number of pivot nodes: {len(pivot)}")

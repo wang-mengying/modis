@@ -28,6 +28,7 @@ def get_best_apx(pareto):
 
     return result
 
+
 def get_best_apx_cost_only(pareto):
     best_costs = [None] * len(next(iter(pareto.values()))[1])
 
@@ -75,6 +76,7 @@ def get_best_bi(pareto):
 
     return result
 
+
 def get_best_bi_cost_only(pareto):
     best_costs = [None] * len(next(iter(pareto.values()))["costs"])
 
@@ -121,18 +123,23 @@ def generate_excel(results, data, output_excel):
     data_for_excel = []
     for filename, bests in data.items():
         extracted_value = float(filename[3:-5])
-        # if any objevtive is None, skip
+        # if any objective is None, skip
         if any([item is None for item in bests.values()]):
             continue
         row_data = [
             results[-2],
             extracted_value,
-            bests['c1'][1][0], bests['c2'][1][1], bests['c3'][1][2],
-            bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2]
+            # Movie
+            # bests['c1'][1][0], bests['c2'][1][1], bests['c3'][1][2],
+            # bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2]
+            # House
+            bests['c1'][1][0],
+            bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2], bests['b4'][2][3]
         ]
         data_for_excel.append(row_data)
 
-    df = pd.DataFrame(data_for_excel, columns=["Max_length", "Epsilon", "c1", "c2", "c3", "b1", "b2", "b3"])
+    # df = pd.DataFrame(data_for_excel, columns=["Max_length", "Epsilon", "c1", "c2", "c3", "b1", "b2", "b3"]) # Movie
+    df = pd.DataFrame(data_for_excel, columns=["Max_length", "Epsilon", "c1", "b1", "b2", "b3", "b4"]) # House
     df.to_excel(output_excel, index=False)
 
 
@@ -140,7 +147,7 @@ def generate_excel_cost_only(results, data, output_excel):
     data_for_excel = []
     for filename, bests in data.items():
         extracted_value = float(filename[3:-5])
-        # if any objevtive is None, skip
+        # if any objective is None, skip
         if any([item is None for item in bests.values()]):
             continue
         print(bests)
@@ -166,23 +173,25 @@ def generate_csv(results, data, output_csv):
 
     df = pd.DataFrame(data_for_csv, columns=["Id", "Label"])
 
-    df = sample.cal_objectives_movie(df, "../Dataset/Kaggle/others/movie_clustered_table.csv")
+    # df = sample.cal_objectives_movie(df, "../Dataset/Kaggle/others/movie_clustered_table.csv")
+    df = sample.cal_objectives_house(df, "../Dataset/OpenData/House/processed/house_original.csv",
+                                     "../Dataset/OpenData/House/processed/house_clustered.csv")
 
-    df.to_csv(output_csv, index=False)
+    df.to_csv(output_csv, mode='a', header=False, index=False)
 
 
 def main():
     algorithms = ["apx", "no", "bi", "div"]
-    results = "../Dataset/Kaggle/results/ml6/"
+    results = "../Dataset/OpenData/House/results/ml2/"
 
-    if "Kaggle" in results:
-        cost_only = False
-    else:
+    if "HuggingFace" in results:
         cost_only = True
+    else:
+        cost_only = False
 
     for algorithm in algorithms:
-        input_files = [results + algorithm + item for item in ["0.1.json", "0.2.json", "0.3.json", "0.4.json", "0.5.json"]]
-        # input_files = [results + algorithm + item for item in ["0.3.json"]]
+        # input_files = [results + algorithm + item for item in ["0.1.json", "0.2.json", "0.3.json", "0.4.json", "0.5.json"]]
+        input_files = [results + algorithm + item for item in ["0.02.json"]]
         output_json = results + algorithm + "_best.json"
         output_excel = results + algorithm + "_best.xlsx"
         output_csv = results + algorithm + "_best.csv"

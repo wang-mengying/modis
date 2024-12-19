@@ -64,16 +64,25 @@ def group(constraints, r, c_min, b_max, nodes):
 
 def get_cmax_bmin(G):
     """Get maximum costs and minimum benefits"""
-    model_objectives_mins = [min(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
-    feature_objectives_mins = [min(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(3)]
+    num_m = len(G.nodes[0]['model_objectives'])
+    num_f = len(G.nodes[0]['feature_objectives'])
 
-    model_objectives_maxs = [max(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
-    feature_objectives_maxs = [max(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(3)]
+    model_objectives_mins = [min(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(num_m)]
+    feature_objectives_mins = [min(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(num_f)]
 
-    c_max = [feature_objectives_maxs[2], model_objectives_maxs[0], model_objectives_maxs[2]]
-    b_min = [feature_objectives_mins[0], feature_objectives_mins[1], model_objectives_mins[1]]
+    model_objectives_maxs = [max(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(num_m)]
+    feature_objectives_maxs = [max(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(num_f)]
+
+    # Movie
+    # c_max = [feature_objectives_maxs[2], model_objectives_maxs[0], model_objectives_maxs[2]]
+    # b_min = [feature_objectives_mins[0], feature_objectives_mins[1], model_objectives_mins[1]]
+
+    # House
+    c_max = [model_objectives_maxs[2]]
+    b_min = [feature_objectives_mins[0], feature_objectives_mins[1], model_objectives_mins[1], model_objectives_mins[0]]
 
     return c_max, b_min
+
 
 def get_cmax_min(G):
     """Get maximum costs and minimum benefits"""

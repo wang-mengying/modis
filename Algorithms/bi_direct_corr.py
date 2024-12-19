@@ -7,6 +7,8 @@ import sys
 import time
 import pandas as pd
 import Trainer.movie_gradient_boosting as mgb_movie
+import Utils.sample_nodes as sample
+import Trainer.house_random_forest as house_random_forest
 
 import joblib
 
@@ -19,19 +21,23 @@ import Utils.correlation_analysis as correlation_analysis
 
 # Data = "../Dataset/HuggingFace/"
 # Data = "../Dataset/Kaggle/"
-Data = "../Dataset/Scale/"
-max_length = 6
+# Data = "../Dataset/Scale/"
+Data = "../Dataset/OpenData/House/"
+max_length = 2
 
-dataset = Data + "1011/"
-# dataset = Data + "results/ml" + str(max_length) + "/"
+# dataset = Data + "1011/"
+dataset = Data + "results/ml" + str(max_length) + "/"
 dataset = dataset.replace('/', '\\')
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
-if "Kaggle" or "Scale" in Data:
+if "Kaggle" in Data or "Scale" in Data:
     records = pd.read_csv('../Surrogate/Movie/sample_nodes.csv')
     relations = correlation_analysis.get_relations('../Dataset/Kaggle/others/d7m8/nodes.json')
 elif "HuggingFace" in Data:
     records = pd.read_csv('../Surrogate/HuggingFace/sample_nodes.csv')
-    relations = correlation_analysis.gat_relations('../Dataset/HuggingFace/results/ml6/nodes.json', 'avocado')
+    relations = correlation_analysis.get_relations('../Dataset/HuggingFace/results/ml6/nodes.json', 'avocado')
+elif "House" in Data:
+    records = pd.read_csv('../Surrogate/House/sample_nodes.csv')
+    relations = correlation_analysis.get_relations('../Dataset/OpenData/House/results/ml6/nodes.json', 'house')
 
 
 def cal_box_cost_only(path, epsilon, c_min):
@@ -45,19 +51,31 @@ def cal_box_cost_only(path, epsilon, c_min):
     return tuple(box)
 
 
-def costs_benefits(state, model_path='../Surrogate/Movie/movie_surrogate.joblib',
-                   cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
+def costs_benefits(state, model_path='../Surrogate/House/house_surrogate.joblib',
+                   cluster_file='../Dataset/OpenData/House/processed/house_clustered.csv'):
+    cluster_file = cluster_file.replace('/', '\\')
     node = {}
     node['Label'] = str(state)
     # node['Label'] = str(pad_tuple(str(state)))
     df = movie_objectives.surrogate_inputs(node, cluster_file)
 
     model = joblib.load(model_path)
-    model_objectives = list(model.predict(df)[0])
-    feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+    model_objectives = model.predict(df)[0]
+    # Movie
+    # feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+    # costs = [feature_objectives[2], model_objectives[0], model_objectives[2]]
+    # benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1]]
 
-    costs = [feature_objectives[2], model_objectives[0], model_objectives[2]]
-    benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1]]
+    # House
+    df_table = sample.process_data(node['Label'], cluster_file)
+    X, y, _ = house_random_forest.process_data(df_table)
+    feature_objectives = house_random_forest.feature_objs(X, y)
+    feature_objectives = list(feature_objectives)
+    # costs = [model_objectives[2]]
+    # benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1], model_objectives[0]]
+    # House Part
+    costs = [model_objectives[2]]
+    benefits = [feature_objectives[0], feature_objectives[1], None, model_objectives[0]]
 
     return [costs, benefits]
 
@@ -88,62 +106,18 @@ def cal_box(path, epsilon, c_min, b_max):
 
     # Benefits
     for i in range(len(path["benefits"])):
-        box.append(0) if path["benefits"][i] == 0 or path["costs"][i] == None else \
+        box.append(0) if path["benefits"][i] == 0 or path["benefits"][i] == None else \
             box.append(math.floor(math.log(path["benefits"][i] / b_max[i], 1 - epsilon[i + len(path["costs"])])))
 
     return tuple(box)
 
-# def cal_box(path, epsilon, c_min):
-#     box = []
-#
-#     path["costs"] = [0.0001 if c <= 0 else c for c in path["costs"]]
-#
-#
-#     # Costs
-#     for i in range(len(path["costs"])):
-#         box.append(0) if path["costs"][i] == 0 or path["costs"][i] ==None else \
-#             box.append(math.floor(math.log(path["costs"][i] / c_min[i], 1 + epsilon[i])))
-#
-#     return tuple(box)
 
-
-# def costs_benefits(state, model_path='../Surrogate/Kaggle/movie_surrogate.joblib',
-#                    cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
-#     node = {}
-#     node['Label'] = str(state)
-#     df = movie_objectives.surrogate_inputs(node, cluster_file)
-#
-#     model = joblib.load(model_path)
-#     model_objectives = list(model.predict(df)[0])
-#     feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
-#
-#     costs = [feature_objectives[2], model_objectives[0], model_objectives[2]]
-#     benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1]]
-#
-#     return [costs, benefits]
-
-
-# def cal_costs(state, model_path='../Surrogate/HuggingFace/hf_surrogate.joblib',
-#                    cluster_file=Data+'clustered_table.csv'):
-#     node = {}
-#     node['Label'] = str(state)
-#     df = movie_objectives.surrogate_inputs(node, cluster_file)
-#
-#     model = joblib.load(model_path)
-#     model_objectives = list(model.predict(df)[0])
-#
-#     costs = [model_objectives[1], model_objectives[2], model_objectives[0]]
-#     costs = [0.0001 if c <= 0 else c for c in costs]
-#
-#     return costs
-
-
-def costs_benefits_part(state, cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
+def costs_benefits_part(state, cluster_file='../Dataset/OpenData/House/processed/house_clustered.csv'):
     node = {}
     node['Label'] = str(state)
 
+    # Movie
     feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
-
     costs = [feature_objectives[2], None, None]
     benefits = [feature_objectives[0], feature_objectives[1], None]
 
@@ -246,9 +220,15 @@ def fill_missing_objectives_cost_only(state, nodes_json):
 
 
 def fill_missing_objectives(state):
-    costs, benefits = costs_benefits_part(state)
-    c = ['vif', 'training_time', 'complexity']
-    b = ['fisher', 'mutual_info', 'accuracy']
+    # Movie
+    # costs, benefits = costs_benefits_part(state)
+    # c = ['vif', 'training_time', 'complexity']
+    # b = ['fisher', 'mutual_info', 'accuracy']
+
+    # House
+    costs, benefits = costs_benefits(state)
+    c = ['training_time']
+    b = ['fisher', 'mutual_info', 'f1', 'accuracy']
 
     node = {}
     node['Label'] = str(state)
@@ -656,17 +636,17 @@ def pre_clusters(df, target, classif=True):
 
 
 def main():
-    G = pickle.load(open('../Dataset/Kaggle/results/ml6/costs.gpickle', 'rb'))
+    G = pickle.load(open('../Dataset/OpenData/House/results/ml6/costs.gpickle', 'rb'))
 
     # start_node = 0
     # end_node = 37653
-    e = 0.2
-    # epsilon = [e] * 5 + [0.0001]
-    epsilon = [e] * 6
-    feature = 10
-    cluster = 11
+    e = 0.02
+    epsilon = [e] * 5
+    # epsilon = [e] * 6
+    feature = 20
+    cluster = 7
 
-    if "Kaggle" or "Scale" in Data:
+    if "Kaggle" in Data or "Scale" in Data:
         c_min, b_max = get_cmin_bmax(G)
         clusters = pd.read_csv('../Dataset/Kaggle/others/movie_clustered_table.csv')
         clusters = mgb_movie.preprocess_data(clusters)
@@ -678,6 +658,20 @@ def main():
 
         start_time = time.time()
         # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
+        pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+        end_time = time.time()
+    elif "House" in Data:
+        c_min, b_max = get_cmin_bmax(G)
+        clusters = pd.read_csv(Data + 'processed/house_clustered.csv')
+        X, y, _ = house_random_forest.process_data(clusters)
+        clusters = pd.concat([X, y], axis=1)
+        pre = pre_clusters(clusters, 'PRICE_CLASS')
+        indices = [pre[i] for i in pre.keys()]
+
+        start_state = (tuple([1] * feature), tuple([1] * cluster))
+        end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
+
+        start_time = time.time()
         pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
         end_time = time.time()
     elif "HuggingFace" in Data:

@@ -31,7 +31,7 @@ def load_and_preprocess_data(filepath):
     return data
 
 def split_data(data):
-    feature_cols = [col for col in data.columns if col not in ['Id', 'accuracy', 'f1', 'training_time']]
+    feature_cols = [col for col in data.columns if col not in ['Id', 'accuracy', 'f1', 'training_time', 'fisher', 'mutual_info']]
     target_cols = ['accuracy', 'f1', 'training_time']
 
     X = data[feature_cols]
@@ -59,11 +59,12 @@ def main():
     # Save the trained model for future inference
     joblib.dump(trained_model, 'house_surrogate.joblib')
     mse_scores_revised = evaluate_model(trained_model, X_test, y_test)
-    print(f"MSE for 'accuracy', 'f1', 'training_time': {mse_scores_revised[0]}, {mse_scores_revised[1]}, {mse_scores_revised[2]}")
+    print(f"MSE for 'accuracy', 'f1', 'training_time': "
+          f"{mse_scores_revised[0]}, {mse_scores_revised[1]}, {mse_scores_revised[2]}")
 
 
 if __name__ == "__main__":
     main()
 
 
-#MSE for 'accuracy', 'f1', 'training_time': 0.00016568305466068957, 0.00016394133416958344, 0.00010481382970620629
+#MSE for 'accuracy', 'f1', 'training_time': 0.00016568305466068957, 0.00016394133416958344, 7.098596170847281e-05

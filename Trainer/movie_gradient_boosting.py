@@ -118,10 +118,11 @@ def feature_objs(df):
 def main():
     start = time.time()
     dataset_path = "../Baselines/Movie/"
-    filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
-    # filename = sys.argv[1] if len(sys.argv) > 1 else 'metam_mult.csv'
-    # path = dataset_path + filename
-    path = "../Dataset/Kaggle/processed/movie_filtered.csv"
+    filename = "metam_accuracy.csv"
+    # filename = sys.argv[1] if len(sys.argv) > 1 else 'processed/movie_filtered.csv'
+    # # filename = sys.argv[1] if len(sys.argv) > 1 else 'metam_mult.csv'
+    path = dataset_path + filename
+    # path = "../Dataset/Kaggle/processed/movie_filtered.csv"
     df = pd.read_csv(path)
     # print(df.head())
 

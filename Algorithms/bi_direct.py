@@ -11,15 +11,17 @@ import Trainer.movie_gradient_boosting as mgb_movie
 
 from Algorithms.si_direct import get_cmin_bmax, get_cmin
 from Utils.graph_igraph_table import pad_tuple
+import Utils.sample_nodes as sample
+import Trainer.house_random_forest as house_random_forest
 
 sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
-Data = "../Dataset/Scale/"
-max_length = 10
+Data = "../Dataset/OpenData/House/"
+max_length = 2
 
-dataset = Data + "1108/"
-# dataset = Data + "results/ml" + str(max_length) + "/"
+# dataset = Data + "1108/"
+dataset = Data + "results/ml" + str(max_length) + "/"
 dataset = dataset.replace('/', '\\')
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 
@@ -52,19 +54,30 @@ def cal_box_cost_only(path, epsilon, c_min):
     return tuple(box)
 
 
-def costs_benefits(state, model_path='../Surrogate/Movie/movie_surrogate.joblib',
-                   cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
+def costs_benefits(state, model_path='../Surrogate/House/house_surrogate.joblib',
+                   cluster_file='../Dataset/OpenData/House/processed/house_clustered.csv'):
+    cluster_file = cluster_file.replace('/', '\\')
+
     node = {}
-    node['Label'] = str(pad_tuple(str(state)))
-    # node['Label'] = str(state)
+    # node['Label'] = str(pad_tuple(str(state)))
+    node['Label'] = str(state)
     df = movie_objectives.surrogate_inputs(node, cluster_file)
 
     model = joblib.load(model_path)
-    model_objectives = list(model.predict(df)[0])
-    feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+    model_objectives = model.predict(df)[0]
 
-    costs = [feature_objectives[2], model_objectives[0], model_objectives[2]]
-    benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1]]
+    # Movie
+    # feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+    # costs = [feature_objectives[2], model_objectives[0], model_objectives[2]]
+    # benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1]]
+
+    # House
+    df_table = sample.process_data(node['Label'], cluster_file)
+    X, y, _ = house_random_forest.process_data(df_table)
+    feature_objectives = house_random_forest.feature_objs(X, y)
+    feature_objectives = list(feature_objectives)
+    costs = [model_objectives[2]]
+    benefits = [feature_objectives[0], feature_objectives[1], model_objectives[1], model_objectives[0]]
 
     return [costs, benefits]
 
@@ -143,13 +156,22 @@ def update_pareto(pareto_set: dict, box, path, epsilon, prun_set):
 
 
 def obj2cb(G, node):
-    costs = [G.nodes[node]['feature_objectives'][2],
-             G.nodes[node]['model_objectives'][0],
-             G.nodes[node]['model_objectives'][2]]
+    # Movie
+    # costs = [G.nodes[node]['feature_objectives'][2],
+    #          G.nodes[node]['model_objectives'][0],
+    #          G.nodes[node]['model_objectives'][2]]
+    #
+    # benefits = [G.nodes[node]['feature_objectives'][0],
+    #             G.nodes[node]['feature_objectives'][1],
+    #             G.nodes[node]['model_objectives'][1]]
+
+    # House
+    costs = [G.nodes[node]['model_objectives'][2]]
 
     benefits = [G.nodes[node]['feature_objectives'][0],
                 G.nodes[node]['feature_objectives'][1],
-                G.nodes[node]['model_objectives'][1]]
+                G.nodes[node]['model_objectives'][1],
+                G.nodes[node]['model_objectives'][0]]
 
     return [costs, benefits]
 
@@ -527,17 +549,17 @@ def pre_clusters(df, target, classif=True):
 
 
 def main():
-    G = pickle.load(open('../Dataset/Kaggle/results/ml6/costs.gpickle', 'rb'))
+    G = pickle.load(open('../Dataset/OpenData/House/results/ml6/costs.gpickle', 'rb'))
 
     # start_node = 0
     # end_node = 37653
-    e = 0.2
-    # epsilon = [e] * 5 + [0.0001]
-    epsilon = [e] * 6
-    feature = 11
-    cluster = 10
+    e = 0.02
+    epsilon = [e] * 5
+    # epsilon = [e] * 5
+    feature = 20
+    cluster = 7
 
-    if "Kaggle" or "Scale" in Data:
+    if "Kaggle" in Data or "Scale" in Data:
         c_min, b_max = get_cmin_bmax(G)
         clusters = pd.read_csv('../Dataset/Kaggle/others/movie_clustered_table.csv')
         clusters = mgb_movie.preprocess_data(clusters)
@@ -551,6 +573,21 @@ def main():
         # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
         pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
         end_time = time.time()
+
+    elif "House" in Data:
+        c_min, b_max = get_cmin_bmax(G)
+        clusters = pd.read_csv(Data + 'processed/house_clustered.csv')
+        X, y, _ = house_random_forest.process_data(clusters)
+        clusters = pd.concat([X, y], axis=1)
+        pre = pre_clusters(clusters, 'PRICE_CLASS')
+        indices = [pre[i] for i in pre.keys()]
+
+        start_state = (tuple([1] * feature), tuple([1] * cluster))
+        end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
+
+        start_time = time.time()
+        pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+        end_time = time.time()
     elif "HuggingFace" in Data:
         c_min = get_cmin(G)
         # clusters = pd.read_csv(Data + 'clustered_table.csv')
@@ -558,15 +595,14 @@ def main():
         # pre = pre_clusters(clusters, 'gross_class')
         # indices = [pre[i] for i in pre.keys()]
 
+        # clusters = pd.read_csv(Data + 'clustered_table.csv')
+        # indices = pre_clusters(clusters, None, None)
 
-    # clusters = pd.read_csv(Data + 'clustered_table.csv')
-    # indices = pre_clusters(clusters, None, None)
+        # start_state = (tuple([1] * 11), tuple([1] * 11))
+        # end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
 
-    # start_state = (tuple([1] * 11), tuple([1] * 11))
-    # end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
-
-    # start_state = (tuple([1] * 12), tuple([1] * 10))
-    # end_state = (tuple([0] * 12), tuple(1 if i in indices else 0 for i in range(10)))
+        # start_state = (tuple([1] * 12), tuple([1] * 10))
+        # end_state = (tuple([0] * 12), tuple(1 if i in indices else 0 for i in range(10)))
 
     logging.info(f"epsilon: {epsilon}")
     logging.info(f"max_length: {max_length}")

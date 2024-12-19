@@ -14,11 +14,13 @@ from multiprocessing import Pool
 
 sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
+import Trainer.house_random_forest as house_random_forest
+import Utils.sample_nodes as sample
 
-Data = "../Dataset/Scale/"
+Data = "../Dataset/OpenData/House/"
 max_length = 6
-dataset = Data + "1011/"
-# dataset = Data + "results/ml" + str(max_length) + "/"
+# dataset = Data + "1011/"
+dataset = Data + "results/ml" + str(max_length) + "/"
 dataset = dataset.replace('/', '\\')
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 nodes_df = pd.read_csv(dataset + 'nodes.csv')
@@ -36,12 +38,18 @@ def worker_initializer(model_path):
     surrogate_model = joblib.load(model_path)
 
 
-def get_objectives(node_id, model, cluster_file='../Dataset/Kaggle/others/movie_clustered_table.csv'):
-    # cluster_file = cluster_file.replace('/', '\\')
+def get_objectives(node_id, model, cluster_file='../Dataset/OpenData/House/processed/house_clustered.csv'):
+    cluster_file = cluster_file.replace('/', '\\')
     node = G.nodes[node_id]
     df = movie_objectives.surrogate_inputs(node, cluster_file)
     model_objectives = model.predict(df)[0]
-    feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+    # Movie
+    # feature_objectives = movie_objectives.feature_objectives(node, cluster_file)
+    # House
+    df_table = sample.process_data(node['Label'], cluster_file)
+    X, y, _ = house_random_forest.process_data(df_table)
+    feature_objectives = house_random_forest.feature_objs(X, y)
+    feature_objectives = list(feature_objectives)
 
     return list(model_objectives), feature_objectives
 
@@ -73,15 +81,24 @@ def cal_costs_benefits(args):
     sm_objs, sf_objs = node_data[u]['model_objectives'], node_data[u]['feature_objectives']
     tm_objs, tf_objs = node_data[v]['model_objectives'], node_data[v]['feature_objectives']
 
-    time = tm_objs[0] - sm_objs[0]
-    accuracy = tm_objs[1] - sm_objs[1]
-    complexity = tm_objs[2] - sm_objs[2]
+    # Movie
+    # time = tm_objs[0] - sm_objs[0]
+    # accuracy = tm_objs[1] - sm_objs[1]
+    # complexity = tm_objs[2] - sm_objs[2]
+    # fisher = tf_objs[0] - sf_objs[0]
+    # mutual_info = tf_objs[1] - sf_objs[1]
+    # vif = tf_objs[2] - sf_objs[2]
+    # costs = [vif, time, complexity]
+    # benefits = [fisher, mutual_info, accuracy]
+
+    # House
     fisher = tf_objs[0] - sf_objs[0]
     mutual_info = tf_objs[1] - sf_objs[1]
-    vif = tf_objs[2] - sf_objs[2]
-
-    costs = [vif, time, complexity]
-    benefits = [fisher, mutual_info, accuracy]
+    f1 = tm_objs[1] - sm_objs[1]
+    accuracy = tm_objs[0] - sm_objs[0]
+    training_time = tm_objs[2] - sm_objs[2]
+    costs = [training_time]
+    benefits = [fisher, mutual_info, f1, accuracy]
 
     return u, v, costs, benefits
 
@@ -101,14 +118,21 @@ def costs_benefits(G):
 
 
 def get_cmin_bmax(G):
-    model_objectives_mins = [min(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
-    feature_objectives_mins = [min(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(3)]
+    num_m = len(G.nodes[0]['model_objectives'])
+    num_f = len(G.nodes[0]['feature_objectives'])
 
-    model_objectives_maxs = [max(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(3)]
-    feature_objectives_maxs = [max(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(3)]
+    model_objectives_mins = [min(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(num_m)]
+    feature_objectives_mins = [min(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(num_f)]
 
-    c_min = [feature_objectives_mins[2], model_objectives_mins[0], model_objectives_mins[2]]
-    b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1]]
+    model_objectives_maxs = [max(G.nodes[node]['model_objectives'][i] for node in G.nodes()) for i in range(num_m)]
+    feature_objectives_maxs = [max(G.nodes[node]['feature_objectives'][i] for node in G.nodes()) for i in range(num_f)]
+
+    # Movie
+    # c_min = [feature_objectives_mins[2], model_objectives_mins[0], model_objectives_mins[2]]
+    # b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1]]
+    # House
+    c_min = [model_objectives_mins[2]]
+    b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1], model_objectives_maxs[0]]
 
     return c_min, b_max
 
@@ -148,8 +172,13 @@ def get_pareto(G, s, r, t, c_min, b_max, max_length):
     :return: Pi
     """
     Pi = defaultdict(lambda: defaultdict(dict))
-    c = [G.nodes[s]['feature_objectives'][2], G.nodes[s]['model_objectives'][0], G.nodes[s]['model_objectives'][2]]
-    b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1]]
+    # Movie
+    # c = [G.nodes[s]['feature_objectives'][2], G.nodes[s]['model_objectives'][0], G.nodes[s]['model_objectives'][2]]
+    # b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1]]
+    # House
+    c = [G.nodes[s]['model_objectives'][2]]
+    b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1], G.nodes[s]['model_objectives'][0]]
+
     pos_s = pos((None, tuple(c), tuple(b), None, None), r, c_min, b_max)
     Pi[0][s][str(pos_s)] = (G.nodes[s]['Label'], tuple(c), tuple(b), None, None)
     for i in range(1, max_length+1):
@@ -203,26 +232,29 @@ def merge(D, node, pos_q, path):
 
 
 def main():
-    epsilon = 0.2
-    logging.info(f"epsilon: {epsilon}")
     logging.info(f"max_length: {max_length}")
-    r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1]
-    t = [5, 1.5, 555]
-    # t = [500, 150, 5550]
+    epsilon = 0.02
 
-    model_path = '../Surrogate/Movie/movie_surrogate.joblib'.replace("/", "\\")
+    # r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1] # Movie
+    r = [1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1] # House
+    # t = [5, 1.5, 555] # Movie
+    t = [2] # House
 
-    start = time.time()
-    logging.info("Nodes objectives...")
-    nodes_objectives(G, model_path)
-    pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
-    logging.info("Edges costs/benefits...")
-    costs_benefits(G)
-    end = time.time()
-    logging.info(f"Cost/Benefit Calculation Time: {end - start}")
-    pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
+    model_path = '../Surrogate/House/house_surrogate.joblib'
+    model_path = model_path.replace("/", "\\")
 
-    # G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
+    # start = time.time()
+    # logging.info("Nodes objectives...")
+    # nodes_objectives(G, model_path)
+    # pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
+    # logging.info("Edges costs/benefits...")
+    # costs_benefits(G)
+    # end = time.time()
+    # logging.info(f"Cost/Benefit Calculation Time: {end - start}")
+    # pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
+
+    G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
+    logging.info(f"epsilon: {epsilon}")
     c_min, b_max = get_cmin_bmax(G)
     logging.info(f"c_min: {c_min}, b_max: {b_max}")
     logging.info("Getting pareto set...")

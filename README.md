@@ -20,7 +20,7 @@
 
 * BiMODis:
 
-    * Build orrelation graph: Utils/correlation_analysis.py -> correlation_graph.csv
+    * Build correlation graph: Utils/correlation_analysis.py -> correlation_graph.csv
   
     * Run BiMODis: Algorithms/bi_direct_corr.py
 
@@ -28,5 +28,4 @@
 
 * DivMODis: Algorithms/divmodis.py
 
-* IncMODis: Algorithms/incmodis.py
 
