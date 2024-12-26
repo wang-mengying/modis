@@ -9,15 +9,16 @@ import pickle
 import joblib
 import networkx as nx
 import pandas as pd
-from collections import defaultdict
+from collections import defaultdict, Counter
 from multiprocessing import Pool
 
 sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 import Trainer.house_random_forest as house_random_forest
 import Utils.sample_nodes as sample
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 
-Data = "../Dataset/OpenData/House/"
+Data = "../Dataset/ModsNet/"
 max_length = 6
 # dataset = Data + "1011/"
 dataset = Data + "results/ml" + str(max_length) + "/"
@@ -73,6 +74,99 @@ def nodes_objectives(G, model_path):
     nx.set_node_attributes(G, feature_objectives, 'feature_objectives')
 
 
+def get_cluster_counts_modsnet(clustered_file='../Dataset/ModsNet/processed/graph_clustered.txt'.replace('/', '\\')):
+    clustered_data = pd.read_csv(clustered_file, sep="\t", header=None, names=["connection", "cluster"])
+
+    # Count edges for each cluster
+    cluster_counts = Counter(clustered_data["cluster"])
+
+    # Convert to dictionary
+    cluster_count_dict = dict(cluster_counts)
+
+    return cluster_count_dict
+
+
+def process_batch_modsnet(batch, cluster_count_dict, model_path, record):
+    # Load the model inside the worker process
+    model = joblib.load(model_path)
+
+    batch_data = []
+    batch_ids = []
+    results = []
+
+    for index, row in batch.iterrows():
+        node_id = row['Id']
+        print(node_id)
+
+        metric_columns = ["precision@5", "precision@10", "recall@5", "recall@10", "ndcg@5", "ndcg@10"]
+        if node_id in record["Id"].values:
+            metrics = record.loc[record["Id"] == node_id, metric_columns].iloc[0].tolist()
+            results.append((node_id, metrics, []))
+            continue
+
+        label = eval(row['Label'])
+        features, clusters = label
+
+        # Check the condition: if the 3rd digit in clusters (index 2) is 0
+        if clusters[2] == 0:
+            results.append((node_id, [0, 0, 0, 0, 0, 0], []))
+            continue
+
+        # Prepare input data for the model
+        data = {}
+        data["active_items"] = features.count(1)
+        data["active_values"] = clusters.count(1)
+        data["num_rows"] = sum(count for cluster_id, count in cluster_count_dict.items() if clusters[cluster_id])
+        data["num_cols"] = sum(features[:9]) + (8 if any(features[9:]) else 0)
+
+        # Add feature and cluster states
+        for i, state in enumerate(features):
+            data[f'feature_{i + 1}'] = state
+        for i, state in enumerate(clusters):
+            data[f'cluster_{i + 1}'] = state
+
+        batch_data.append(data)
+        batch_ids.append(node_id)
+
+    # Perform model inference for the batch (if there's data)
+    if batch_data:
+        batch_df = pd.DataFrame(batch_data)
+        batch_objectives = model.predict(batch_df)
+
+        for node_id, objectives in zip(batch_ids, batch_objectives):
+            results.append((node_id, objectives.tolist(), []))
+
+    return results
+
+def get_objectives_modsnet(cluster_count_dict, batch_size=1000,
+                           model_path='../Surrogate/ModsNet/modsnet_surrogate.joblib'.replace('/','\\'),
+                           record_path='../Surrogate/ModsNet/sample_nodes.csv'.replace('/', '\\')):
+
+    global G
+    results = []
+    record = pd.read_csv(record_path)
+
+    # Split nodes_df into batches
+    batches = [nodes_df[start:start + batch_size] for start in range(0, len(nodes_df), batch_size)]
+
+    # Use ProcessPoolExecutor for parallel processing
+    with ProcessPoolExecutor() as executor:
+        futures = [
+            executor.submit(process_batch_modsnet, batch, cluster_count_dict, model_path, record)
+            for batch in batches
+        ]
+        for future in futures:
+            results.extend(future.result())
+
+    # Update the graph with results
+    for node_id, model_objectives, feature_objectives in results:
+        G.nodes[node_id]['model_objectives'] = model_objectives
+        G.nodes[node_id]['feature_objectives'] = feature_objectives
+
+    print("Graph updated with node attributes: 'model_objectives' and 'feature_objectives'.")
+    return G
+
+
 def cal_costs_benefits(args):
     edge, node_data = args
     print(edge)
@@ -92,13 +186,23 @@ def cal_costs_benefits(args):
     # benefits = [fisher, mutual_info, accuracy]
 
     # House
-    fisher = tf_objs[0] - sf_objs[0]
-    mutual_info = tf_objs[1] - sf_objs[1]
-    f1 = tm_objs[1] - sm_objs[1]
-    accuracy = tm_objs[0] - sm_objs[0]
-    training_time = tm_objs[2] - sm_objs[2]
-    costs = [training_time]
-    benefits = [fisher, mutual_info, f1, accuracy]
+    # fisher = tf_objs[0] - sf_objs[0]
+    # mutual_info = tf_objs[1] - sf_objs[1]
+    # f1 = tm_objs[1] - sm_objs[1]
+    # accuracy = tm_objs[0] - sm_objs[0]
+    # training_time = tm_objs[2] - sm_objs[2]
+    # costs = [training_time]
+    # benefits = [fisher, mutual_info, f1, accuracy]
+
+    # ModsNet
+    precision5 = tm_objs[0] - sm_objs[0]
+    precision10 = tm_objs[1] - sm_objs[1]
+    recall5 = tm_objs[2] - sm_objs[2]
+    recall10 = tm_objs[3] - sm_objs[3]
+    ndcg5 = tm_objs[4] - sm_objs[4]
+    ndcg10 = tm_objs[5] - sm_objs[5]
+    costs = []
+    benefits = [precision5, precision10, recall5, recall10, ndcg5, ndcg10]
 
     return u, v, costs, benefits
 
@@ -131,8 +235,12 @@ def get_cmin_bmax(G):
     # c_min = [feature_objectives_mins[2], model_objectives_mins[0], model_objectives_mins[2]]
     # b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1]]
     # House
-    c_min = [model_objectives_mins[2]]
-    b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1], model_objectives_maxs[0]]
+    # c_min = [model_objectives_mins[2]]
+    # b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1], model_objectives_maxs[0]]
+    # modsnet
+    c_min = []
+    b_max = [model_objectives_maxs[0], model_objectives_maxs[1],  model_objectives_maxs[2],
+              model_objectives_maxs[3],  model_objectives_maxs[4], model_objectives_maxs[5]]
 
     return c_min, b_max
 
@@ -156,6 +264,9 @@ def pos(q: tuple, r: list, c_min, b_max):
 
     # Benefits
     for i in range(len(q[2])-1):
+        if q[2][i] == 0:
+            pos_q.append(0)
+            continue
         pos_q.append(math.floor(math.log(q[2][i] / b_max[i], r[i + len(q[1])])))
 
     return tuple(pos_q)
@@ -176,8 +287,12 @@ def get_pareto(G, s, r, t, c_min, b_max, max_length):
     # c = [G.nodes[s]['feature_objectives'][2], G.nodes[s]['model_objectives'][0], G.nodes[s]['model_objectives'][2]]
     # b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1]]
     # House
-    c = [G.nodes[s]['model_objectives'][2]]
-    b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1], G.nodes[s]['model_objectives'][0]]
+    # c = [G.nodes[s]['model_objectives'][2]]
+    # b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1], G.nodes[s]['model_objectives'][0]]
+    # modsnet
+    c = []
+    b = [G.nodes[s]['model_objectives'][0], G.nodes[s]['model_objectives'][1], G.nodes[s]['model_objectives'][2],
+         G.nodes[s]['model_objectives'][3], G.nodes[s]['model_objectives'][4], G.nodes[s]['model_objectives'][5]]
 
     pos_s = pos((None, tuple(c), tuple(b), None, None), r, c_min, b_max)
     Pi[0][s][str(pos_s)] = (G.nodes[s]['Label'], tuple(c), tuple(b), None, None)
@@ -235,23 +350,29 @@ def main():
     logging.info(f"max_length: {max_length}")
     epsilon = 0.02
 
-    # r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1] # Movie
-    r = [1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1] # House
-    # t = [5, 1.5, 555] # Movie
-    t = [2] # House
+    # Movie
+    # r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1]
+    # t = [5, 1.5, 555]
+    # House
+    # r = [1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1]
+    # t = [2]
+    # model_path = '../Surrogate/House/house_surrogate.joblib'
+    # ModsNet
+    r = [1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1]
+    t = []
+    # model_path = model_path.replace("/", "\\")
 
-    model_path = '../Surrogate/House/house_surrogate.joblib'
-    model_path = model_path.replace("/", "\\")
-
-    # start = time.time()
-    # logging.info("Nodes objectives...")
+    start = time.time()
+    logging.info("Nodes objectives...")
     # nodes_objectives(G, model_path)
-    # pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
-    # logging.info("Edges costs/benefits...")
-    # costs_benefits(G)
-    # end = time.time()
-    # logging.info(f"Cost/Benefit Calculation Time: {end - start}")
-    # pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
+    cluter_counts = get_cluster_counts_modsnet() #ModsNet
+    G = get_objectives_modsnet(cluter_counts) #ModsNet
+    pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
+    logging.info("Edges costs/benefits...")
+    costs_benefits(G)
+    end = time.time()
+    logging.info(f"Cost/Benefit Calculation Time: {end - start}")
+    pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
 
     G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
     logging.info(f"epsilon: {epsilon}")
@@ -264,9 +385,9 @@ def main():
     logging.info(f"ApxMODis Search Time: {end - start}")
 
     pareto_dict = dict(pareto_set)
-    # pareto_json = json.dumps(pareto_dict, indent=4)
-    # with open(dataset + 'si_pareto_' + str(epsilon) + '.json', 'w') as json_file:
-    #     json_file.write(pareto_json)
+    pareto_json = json.dumps(pareto_dict, indent=4)
+    with open(dataset + 'si_pareto_' + str(epsilon) + '.json', 'w') as json_file:
+        json_file.write(pareto_json)
 
     pareto = {}
     nodes = [k for k, v in pareto_dict.items() if v != {}]
@@ -288,6 +409,7 @@ def main():
     node_json = json.dumps(node_data, indent=4)
     with open(dataset + 'nodes.json', 'w') as json_file:
         json_file.write(node_json)
+
 
 
 if __name__ == '__main__':

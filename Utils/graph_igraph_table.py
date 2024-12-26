@@ -78,23 +78,25 @@ def pad_tuple(input_str):
 
     return padded_tuples
 
-
+# e
 def main():
-    features = 2
-    clusters = 10
+    features = 10
+    clusters = 13
     max_length = 6
-    scale = True
+    scale = False
     start = time.time()
     # graph, state_to_id = generate_graph(features, clusters)
     if features == 6 and clusters == 12:
         graph, state_to_id = generate_graph(features, clusters, 0.5, 0.5, max_length)
     elif features == 20 and clusters == 7:
         graph, state_to_id = generate_graph(features, clusters, 0.75, 0.8, max_length)
+    elif features == 10 and clusters == 13:
+        graph, state_to_id = generate_graph(features, clusters, 0.7, 0.7, max_length)
     else:
         graph, state_to_id = generate_graph(features, clusters, max_depth=max_length)
     end = time.time()
     print(end - start)
-    dataset = "../Dataset/Scale/0210/"
+    dataset = "../Dataset/ModsNet/results/"
     # dataset = "../Example/small/t_cluster/maxl/"
 
     # Nodes

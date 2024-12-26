@@ -42,9 +42,9 @@ def igraph_table(L, k, d, m):
     return int(total)
 
 
-schema = [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7]
-cluster = 7
+schema = [13] * 10
+cluster = 13
 
-print(igraph_table(schema, cluster, 0.8, 0.8))
+print(igraph_table(schema, cluster, 0.7, 0.7))
 
 # 2824752490, 2792361600, 130384

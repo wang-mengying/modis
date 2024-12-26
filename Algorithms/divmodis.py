@@ -11,8 +11,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 import si_direct as single
 import divmodis_solo as solo
 
-Data = "../Dataset/HuggingFace/"
+# Data = "../Dataset/HuggingFace/"
 # Data = "../Dataset/OpenData/House/"
+Data = "../Dataset/ModsNet/"
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 
 
@@ -168,12 +169,12 @@ def average_distance_cost_only(nodes, pareto, c_min,c_max, r, a=0.5):
 
 
 def main():
-    length = 3
-    epsilon = 0.1
+    length = 6
+    epsilon = 0.02
     algorithm = "no"
-    size = 5
+    size = 6
     cost_only = False
-    # r = [1 + epsilon, 1 + epsilon, 1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
+    r = [1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
     # r = [1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
     # dataset = Data + "0611/"
     dataset = Data + "results/ml" + str(length) + "/"

@@ -10,6 +10,7 @@ import pandas as pd
 import Trainer.movie_gradient_boosting as mgb_movie
 
 from Algorithms.si_direct import get_cmin_bmax, get_cmin
+from Algorithms.si_direct import get_cluster_counts_modsnet as cluster_modsnet
 from Utils.graph_igraph_table import pad_tuple
 import Utils.sample_nodes as sample
 import Trainer.house_random_forest as house_random_forest
@@ -17,8 +18,8 @@ import Trainer.house_random_forest as house_random_forest
 sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
-Data = "../Dataset/OpenData/House/"
-max_length = 2
+Data = "../Dataset/ModsNet/"
+max_length = 6
 
 # dataset = Data + "1108/"
 dataset = Data + "results/ml" + str(max_length) + "/"
@@ -54,9 +55,15 @@ def cal_box_cost_only(path, epsilon, c_min):
     return tuple(box)
 
 
-def costs_benefits(state, model_path='../Surrogate/House/house_surrogate.joblib',
-                   cluster_file='../Dataset/OpenData/House/processed/house_clustered.csv'):
-    cluster_file = cluster_file.replace('/', '\\')
+def costs_benefits(state, model_path='../Surrogate/ModsNet/modsnet_surrogate.joblib'.replace('/', '\\'),
+                   cluster_file='../Dataset/ModsNet/processed/graph_clustered.txt'.replace('/', '\\'),
+                   record_path="../Surrogate/ModsNet/sample_nodes.csv".replace('/', '\\')):
+
+    if "ModsNet" in cluster_file:
+        cluster_count_dict = cluster_modsnet(clustered_file=cluster_file)
+        output = costs_benefits_modsnet(state, cluster_count_dict, model_path, record_path)
+
+        return output
 
     node = {}
     # node['Label'] = str(pad_tuple(str(state)))
@@ -95,6 +102,54 @@ def costs(state, model_path='../Surrogate/HuggingFace/hf_surrogate.joblib',
     costs = [0.0001 if c <= 0 else c for c in costs]
 
     return costs
+
+
+def costs_benefits_modsnet(state, cluster_count_dict, model_path, record_path):
+    # Load the model inside the worker process
+    model = joblib.load(model_path)
+    record = pd.read_csv(record_path)
+
+    node = {}
+    node['Label'] = str(state)
+    features, clusters = state[0], state[1]
+
+    data = {
+        "active_items": [features.count(1)],
+        "active_values": [clusters.count(1)],
+        "num_rows": [sum(count for cluster_id, count in cluster_count_dict.items() if clusters[cluster_id])],
+        "num_cols": [sum(features[:9]) + (8 if any(features[9:]) else 0)],
+        **{f'feature_{i + 1}': [state] for i, state in enumerate(features)},
+        **{f'cluster_{i + 1}': [state] for i, state in enumerate(clusters)},
+    }
+    print(data)
+
+    metric_columns = ["precision@5", "precision@10", "recall@5", "recall@10", "ndcg@5", "ndcg@10"]
+    if node['Label'] in record["Label"].values:
+        metrics = record.loc[record["Label"] == node['Label'], metric_columns].iloc[0].tolist()
+        model_objectives = metrics
+
+    # Check the condition: if the 3rd digit in clusters (index 2) is 0
+    elif clusters[2] == 0:
+        model_objectives = [0, 0, 0, 0, 0, 0]
+
+    else:
+        data = {
+            "active_items": [features.count(1)],
+            "active_values": [clusters.count(1)],
+            "num_rows": [sum(count for cluster_id, count in cluster_count_dict.items() if clusters[cluster_id])],
+            "num_cols": [sum(features[:9]) + (8 if any(features[9:]) else 0)],
+            **{f'feature_{i + 1}': [state] for i, state in enumerate(features)},
+            **{f'cluster_{i + 1}': [state] for i, state in enumerate(clusters)},
+        }
+
+        df = pd.DataFrame(data)
+        model_objectives = list(model.predict(df)[0])
+
+
+    costs = []
+    benefits = model_objectives
+
+    return [costs, benefits]
 
 
 # Check is path p2 dominates path p1
@@ -166,12 +221,18 @@ def obj2cb(G, node):
     #             G.nodes[node]['model_objectives'][1]]
 
     # House
-    costs = [G.nodes[node]['model_objectives'][2]]
+    # costs = [G.nodes[node]['model_objectives'][2]]
+    #
+    # benefits = [G.nodes[node]['feature_objectives'][0],
+    #             G.nodes[node]['feature_objectives'][1],
+    #             G.nodes[node]['model_objectives'][1],
+    #             G.nodes[node]['model_objectives'][0]]
 
-    benefits = [G.nodes[node]['feature_objectives'][0],
-                G.nodes[node]['feature_objectives'][1],
-                G.nodes[node]['model_objectives'][1],
-                G.nodes[node]['model_objectives'][0]]
+    # modsnet
+    costs = []
+
+    benefits = [G.nodes[node]['model_objectives'][0], G.nodes[node]['model_objectives'][1], G.nodes[node]['model_objectives'][2],
+                G.nodes[node]['model_objectives'][3], G.nodes[node]['model_objectives'][4], G.nodes[node]['model_objectives'][5],]
 
     return [costs, benefits]
 
@@ -534,6 +595,7 @@ def bi_directional_search_state_cost_only(start_state, end_state, epsilon, c_min
     return pareto_set
 
 
+# Ensure at least one "1" is present in the tuple for each class in the target
 def pre_clusters(df, target, classif=True):
     if not classif:
         return df['cluster'].value_counts().head(2).index.tolist()
@@ -549,68 +611,80 @@ def pre_clusters(df, target, classif=True):
 
 
 def main():
-    G = pickle.load(open('../Dataset/OpenData/House/results/ml6/costs.gpickle', 'rb'))
+    G = pickle.load(open('../Dataset/ModsNet/results/ml6/costs.gpickle', 'rb'))
+    costs_benefits((tuple([1] * 10), tuple([1] * 13)))
 
-    # start_node = 0
-    # end_node = 37653
-    e = 0.02
-    epsilon = [e] * 5
-    # epsilon = [e] * 5
-    feature = 20
-    cluster = 7
-
-    if "Kaggle" in Data or "Scale" in Data:
-        c_min, b_max = get_cmin_bmax(G)
-        clusters = pd.read_csv('../Dataset/Kaggle/others/movie_clustered_table.csv')
-        clusters = mgb_movie.preprocess_data(clusters)
-        pre = pre_clusters(clusters, 'gross_class')
-        indices = [pre[i] for i in pre.keys()]
-
-        start_state = (tuple([1] * feature), tuple([1] * cluster))
-        end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
-
-        start_time = time.time()
-        # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
-        pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
-        end_time = time.time()
-
-    elif "House" in Data:
-        c_min, b_max = get_cmin_bmax(G)
-        clusters = pd.read_csv(Data + 'processed/house_clustered.csv')
-        X, y, _ = house_random_forest.process_data(clusters)
-        clusters = pd.concat([X, y], axis=1)
-        pre = pre_clusters(clusters, 'PRICE_CLASS')
-        indices = [pre[i] for i in pre.keys()]
-
-        start_state = (tuple([1] * feature), tuple([1] * cluster))
-        end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
-
-        start_time = time.time()
-        pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
-        end_time = time.time()
-    elif "HuggingFace" in Data:
-        c_min = get_cmin(G)
-        # clusters = pd.read_csv(Data + 'clustered_table.csv')
-        # clusters = mgb.preprocess_data(clusters)
-        # pre = pre_clusters(clusters, 'gross_class')
-        # indices = [pre[i] for i in pre.keys()]
-
-        # clusters = pd.read_csv(Data + 'clustered_table.csv')
-        # indices = pre_clusters(clusters, None, None)
-
-        # start_state = (tuple([1] * 11), tuple([1] * 11))
-        # end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
-
-        # start_state = (tuple([1] * 12), tuple([1] * 10))
-        # end_state = (tuple([0] * 12), tuple(1 if i in indices else 0 for i in range(10)))
-
-    logging.info(f"epsilon: {epsilon}")
-    logging.info(f"max_length: {max_length}")
-    logging.info(f"Search time: {end_time - start_time}")
-    logging.info(f"Pareto set size: {len(pareto)}")
-    pareto_json = json.dumps(pareto, indent=4)
-    with open(dataset + '/no' + str(e) + '.json', 'w') as json_file:
-        json_file.write(pareto_json)
+    # # start_node = 0
+    # # end_node = 37653
+    # e = 0.02
+    # epsilon = [e] * 6
+    # # epsilon = [e] * 5
+    # feature = 10
+    # cluster = 13
+    #
+    # if "Kaggle" in Data or "Scale" in Data:
+    #     c_min, b_max = get_cmin_bmax(G)
+    #     clusters = pd.read_csv('../Dataset/Kaggle/others/movie_clustered_table.csv')
+    #     clusters = mgb_movie.preprocess_data(clusters)
+    #     pre = pre_clusters(clusters, 'gross_class')
+    #     indices = [pre[i] for i in pre.keys()]
+    #
+    #     start_state = (tuple([1] * feature), tuple([1] * cluster))
+    #     end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
+    #
+    #     start_time = time.time()
+    #     # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
+    #     pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+    #     end_time = time.time()
+    #
+    # elif "House" in Data:
+    #     c_min, b_max = get_cmin_bmax(G)
+    #     clusters = pd.read_csv(Data + 'processed/house_clustered.csv')
+    #     X, y, _ = house_random_forest.process_data(clusters)
+    #     clusters = pd.concat([X, y], axis=1)
+    #     pre = pre_clusters(clusters, 'PRICE_CLASS')
+    #     indices = [pre[i] for i in pre.keys()]
+    #
+    #     start_state = (tuple([1] * feature), tuple([1] * cluster))
+    #     end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
+    #
+    #     start_time = time.time()
+    #     pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+    #     end_time = time.time()
+    #
+    # # elif "HuggingFace" in Data:
+    # #     c_min = get_cmin(G)
+    # #     clusters = pd.read_csv(Data + 'clustered_table.csv')
+    # #     clusters = mgb.preprocess_data(clusters)
+    # #     pre = pre_clusters(clusters, 'gross_class')
+    # #     indices = [pre[i] for i in pre.keys()]
+    # #
+    # #     clusters = pd.read_csv(Data + 'clustered_table.csv')
+    # #     indices = pre_clusters(clusters, None, None)
+    # #
+    # #     start_state = (tuple([1] * 11), tuple([1] * 11))
+    # #     end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
+    # #
+    # #     start_state = (tuple([1] * 12), tuple([1] * 10))
+    # #     end_state = (tuple([0] * 12), tuple(1 if i in indices else 0 for i in range(10)))
+    #
+    # elif "ModsNet" in Data:
+    #     c_min, b_max = get_cmin_bmax(G)
+    #
+    #     start_state = (tuple([1] * feature), tuple([1] * cluster))
+    #     end_state = (tuple([0] * feature), (0, 0, 1) + tuple([0] * (cluster-3)))
+    #
+    #     start_time = time.time()
+    #     pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+    #     end_time = time.time()
+    #
+    # logging.info(f"epsilon: {epsilon}")
+    # logging.info(f"max_length: {max_length}")
+    # logging.info(f"Search time: {end_time - start_time}")
+    # logging.info(f"Pareto set size: {len(pareto)}")
+    # pareto_json = json.dumps(pareto, indent=4)
+    # with open(dataset + '/no' + str(e) + '.json', 'w') as json_file:
+    #     json_file.write(pareto_json)
 
 
 if __name__ == '__main__':

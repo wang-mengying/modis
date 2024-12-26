@@ -133,13 +133,17 @@ def generate_excel(results, data, output_excel):
             # bests['c1'][1][0], bests['c2'][1][1], bests['c3'][1][2],
             # bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2]
             # House
-            bests['c1'][1][0],
-            bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2], bests['b4'][2][3]
+            # bests['c1'][1][0],
+            # bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2], bests['b4'][2][3]
+            # modsnet
+            bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2], bests['b4'][2][3], bests['b3'][2][4], bests['b4'][2][5]
+
         ]
         data_for_excel.append(row_data)
 
     # df = pd.DataFrame(data_for_excel, columns=["Max_length", "Epsilon", "c1", "c2", "c3", "b1", "b2", "b3"]) # Movie
-    df = pd.DataFrame(data_for_excel, columns=["Max_length", "Epsilon", "c1", "b1", "b2", "b3", "b4"]) # House
+    # df = pd.DataFrame(data_for_excel, columns=["Max_length", "Epsilon", "c1", "b1", "b2", "b3", "b4"]) # House
+    df = pd.DataFrame(data_for_excel, columns=["Max_length", "Epsilon", "b1", "b2", "b3", "b4", "b5", "b6"]) # ModsNet
     df.to_excel(output_excel, index=False)
 
 
@@ -182,7 +186,8 @@ def generate_csv(results, data, output_csv):
 
 def main():
     algorithms = ["apx", "no", "bi", "div"]
-    results = "../Dataset/OpenData/House/results/ml2/"
+    # results = "../Dataset/OpenData/House/results/ml2/"
+    results = "../Dataset/ModsNet/results/ml6/"
 
     if "HuggingFace" in results:
         cost_only = True
@@ -206,7 +211,7 @@ def main():
         else:
             generate_excel(results, data, output_excel)
 
-        generate_csv(results, data, output_csv)
+        # generate_csv(results, data, output_csv)
 
 
 if __name__ == "__main__":

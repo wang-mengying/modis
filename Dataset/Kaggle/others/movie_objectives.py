@@ -21,7 +21,7 @@ def surrogate_inputs(node, file_path):
     features, clusters = eval(node['Label'])
 
     active_items = features.count(1)
-    active_values = features.count(1)
+    active_values = clusters.count(1)
 
     clusters_counts = count_cluster(file_path)
     num_rows = sum([clusters_counts[i] for i, value in enumerate(clusters) if value == 1])

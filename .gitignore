@@ -178,6 +178,7 @@ pyrightconfig.json
 !.vscode/launch.json
 !.vscode/extensions.json
 !.vscode/*.code-snippets
+.idea
 
 # Local History for Visual Studio Code
 .history/
@@ -199,6 +200,12 @@ datasets/
 Dataset/*/*.csv
 Dataset/*/*.xlsx
 Dataset/*/*.json
+Dataset/ModsNet/*.txt
+Dataset/ModsNet/*/*.txt
+Surrogate/ModsNet/samples/*
+Dataset/ModsNet/processed/*/*.txt
+Dataset/ModsNet/results/ml6/*
+Dataset/Kaggle/others/d7m8/*
 *.json
 log.txt
 Baselines/
