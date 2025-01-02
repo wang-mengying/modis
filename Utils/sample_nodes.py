@@ -10,6 +10,7 @@ import Trainer.movie_gradient_boosting as mgb
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 import Trainer.avocado_linear_regression as alr
 import Trainer.school_logistic_regression as slr
+import Trainer.mental_lgbm as mental_lgbm
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -20,7 +21,7 @@ def extract_counts(label):
     return sum(items), sum(values)
 
 
-def get_sample(df, n_samples=1000):
+def get_sample(df, n_samples=3000):
     df[['active_items', 'active_values']] = df['Label'].apply(extract_counts).apply(pd.Series)
     df['stratum'] = df['active_items'].astype(str) + '-' + df['active_values'].astype(str)
 
@@ -266,6 +267,44 @@ def cal_objectives_school(df_sample, original_file, clustered_file):
     return df_sample
 
 
+def cal_objectives_mental(df_sample, clustered_file):
+    df_sample['num_rows'] = 0
+    df_sample['num_cols'] = 0
+
+    df_sample['accuracy'] = 0.0
+    df_sample['precision'] = 0.0
+    df_sample['recall'] = 0.0
+    df_sample['f1'] = 0.0
+    df_sample['auc'] = 0.0
+    df_sample['time'] = 0.0
+
+    for i, row in df_sample.iterrows():
+        node_id = row['Id']
+        print(f"Processing node {node_id}.")
+
+        node_label = row['Label']
+        df = process_data(node_label, clustered_file)
+
+        df_sample.loc[i, 'num_rows'] = df.shape[0]
+        df_sample.loc[i, 'num_cols'] = df.shape[1]
+
+        try:
+            accuracy, precision, recall, f1, auc, time = mental_lgbm.process(df)
+        except Exception as e:
+            print(f"Error raised. {e}")
+            accuracy, precision, recall, f1, auc, time = 0.0, 0.0, 0.0, 0.0, 0.0
+            continue
+
+        df_sample.loc[i, 'accuracy'] = accuracy
+        df_sample.loc[i, 'precision'] = precision
+        df_sample.loc[i, 'recall'] = recall
+        df_sample.loc[i, 'f1'] = f1
+        df_sample.loc[i, 'auc'] = auc
+        df_sample.loc[i, 'time'] = time
+
+    return df_sample
+
+
 def movie():
     dataset = "../Dataset/Kaggle/"
     surrogate = "../Surrogate/Kaggle/"
@@ -318,12 +357,15 @@ def opendata(topic, original_file, clustered_file):
 
 def modsnet():
     dataset = "../Dataset/ModsNet/"
-    surrogate = "../Surrogate/ModsNet/"
+    surrogate = "../Surrogate/ModsNet/samples/"
     df = pd.read_csv(dataset + 'results/nodes.csv')
 
     print("Sampling ......")
     sample = get_sample(df)
     sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
+
+    # surrogate = "../Surrogate/ModsNet/samples/results/div/"
+    # sample = pd.read_csv(dataset + 'results/div_best.csv')
 
     print("Start processing ......")
     sample['num_rows'] = 0
@@ -374,10 +416,26 @@ def modsnet():
 
     # Save the updated sample with num_rows and num_cols
     sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
+    # sample.to_csv(surrogate + 'div_best.csv', index=False)
+
+
+def mental():
+    dataset = "../Dataset/Mental/"
+    surrogate = "../Surrogate/Mental/"
+    df = pd.read_csv(dataset + 'results/ml6/nodes.csv')
+
+    print("Sampling ......")
+    sample = get_sample(df)
+    sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
+
+    print("Start training ......")
+    sample = cal_objectives_mental(sample, dataset + 'uni_table_clustered.csv')
+
+    sample.to_csv(surrogate + 'sample_nodes.csv', index=False)
 
 
 def main():
-    topic = "ModsNet"
+    topic = "Mental"
     if topic == "Movie":
         movie()
     elif topic == "Avocado":
@@ -388,6 +446,8 @@ def main():
         opendata(topic, "processed/school_filtered.csv", "processed/school_clustered.csv")
     elif topic == "ModsNet":
         modsnet()
+    elif topic == "Mental":
+        mental()
         # # generate sample dataset
         # dataset = "../Dataset/ModsNet/"
         # label = "((0, 0, 0, 0, 1, 0, 1, 0, 1, 0), (0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0))"

@@ -13,7 +13,7 @@ import divmodis_solo as solo
 
 # Data = "../Dataset/HuggingFace/"
 # Data = "../Dataset/OpenData/House/"
-Data = "../Dataset/ModsNet/"
+Data = "../Dataset/Mental/"
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 
 
@@ -176,7 +176,7 @@ def main():
     cost_only = False
     r = [1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
     # r = [1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
-    # dataset = Data + "0611/"
+    # dataset = Data + "0613/"
     dataset = Data + "results/ml" + str(length) + "/"
     dataset = dataset.replace('/', '\\')
     logging.info(f"epsilon: {epsilon}")
@@ -188,6 +188,7 @@ def main():
         pareto = json.load(file)
 
     G = pickle.load(open(Data + '/results/ml6/costs.gpickle', 'rb'))
+    # G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
     if "HuggingFace" in dataset:
         cost_only = True
 

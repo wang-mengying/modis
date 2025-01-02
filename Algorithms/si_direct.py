@@ -16,11 +16,11 @@ sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 import Trainer.house_random_forest as house_random_forest
 import Utils.sample_nodes as sample
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 
-Data = "../Dataset/ModsNet/"
+Data = "../Dataset/Mental/"
 max_length = 6
-# dataset = Data + "1011/"
+# dataset = Data + "1013/"
 dataset = Data + "results/ml" + str(max_length) + "/"
 dataset = dataset.replace('/', '\\')
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
@@ -86,7 +86,17 @@ def get_cluster_counts_modsnet(clustered_file='../Dataset/ModsNet/processed/grap
     return cluster_count_dict
 
 
-def process_batch_modsnet(batch, cluster_count_dict, model_path, record):
+def get_cluster_counts(file_path='../Dataset/Mental/uni_table_clustered.csv'):
+    data = pd.read_csv(file_path)
+
+    if 'cluster' not in data.columns:
+        raise ValueError("The input file does not contain a 'Cluster' column.")
+    cluster_counts = data['cluster'].value_counts().to_dict()
+
+    return cluster_counts
+
+
+def process_batch(batch, cluster_count_dict, model_path, record):
     # Load the model inside the worker process
     model = joblib.load(model_path)
 
@@ -98,7 +108,11 @@ def process_batch_modsnet(batch, cluster_count_dict, model_path, record):
         node_id = row['Id']
         print(node_id)
 
-        metric_columns = ["precision@5", "precision@10", "recall@5", "recall@10", "ndcg@5", "ndcg@10"]
+        #modsnet
+        # metric_columns = ["precision@5", "precision@10", "recall@5", "recall@10", "ndcg@5", "ndcg@10"]
+        #mental
+        metric_columns = ['accuracy','precision','recall','f1','auc','time']
+
         if node_id in record["Id"].values:
             metrics = record.loc[record["Id"] == node_id, metric_columns].iloc[0].tolist()
             results.append((node_id, metrics, []))
@@ -107,17 +121,19 @@ def process_batch_modsnet(batch, cluster_count_dict, model_path, record):
         label = eval(row['Label'])
         features, clusters = label
 
-        # Check the condition: if the 3rd digit in clusters (index 2) is 0
-        if clusters[2] == 0:
-            results.append((node_id, [0, 0, 0, 0, 0, 0], []))
-            continue
+        # Check the condition: if the 3rd digit in clusters (index 2) is 0 (ModsNet)
+        # if clusters[2] == 0:
+        #     results.append((node_id, [0, 0, 0, 0, 0, 0], []))
+        #     continue
 
         # Prepare input data for the model
         data = {}
         data["active_items"] = features.count(1)
         data["active_values"] = clusters.count(1)
         data["num_rows"] = sum(count for cluster_id, count in cluster_count_dict.items() if clusters[cluster_id])
-        data["num_cols"] = sum(features[:9]) + (8 if any(features[9:]) else 0)
+        data["num_cols"] = sum(features) + 1
+        # modsnet
+        # data["num_cols"] = sum(features[:9]) + (8 if any(features[9:]) else 0)
 
         # Add feature and cluster states
         for i, state in enumerate(features):
@@ -138,9 +154,10 @@ def process_batch_modsnet(batch, cluster_count_dict, model_path, record):
 
     return results
 
-def get_objectives_modsnet(cluster_count_dict, batch_size=1000,
-                           model_path='../Surrogate/ModsNet/modsnet_surrogate.joblib'.replace('/','\\'),
-                           record_path='../Surrogate/ModsNet/sample_nodes.csv'.replace('/', '\\')):
+
+def get_objectives_batch(cluster_count_dict, batch_size=1000,
+                           model_path='../Surrogate/Mental/mental_surrogate.joblib'.replace('/','\\'),
+                           record_path='../Surrogate/Mental/sample_nodes.csv'.replace('/', '\\')):
 
     global G
     results = []
@@ -152,7 +169,7 @@ def get_objectives_modsnet(cluster_count_dict, batch_size=1000,
     # Use ProcessPoolExecutor for parallel processing
     with ProcessPoolExecutor() as executor:
         futures = [
-            executor.submit(process_batch_modsnet, batch, cluster_count_dict, model_path, record)
+            executor.submit(process_batch, batch, cluster_count_dict, model_path, record)
             for batch in batches
         ]
         for future in futures:
@@ -195,14 +212,24 @@ def cal_costs_benefits(args):
     # benefits = [fisher, mutual_info, f1, accuracy]
 
     # ModsNet
-    precision5 = tm_objs[0] - sm_objs[0]
-    precision10 = tm_objs[1] - sm_objs[1]
-    recall5 = tm_objs[2] - sm_objs[2]
-    recall10 = tm_objs[3] - sm_objs[3]
-    ndcg5 = tm_objs[4] - sm_objs[4]
-    ndcg10 = tm_objs[5] - sm_objs[5]
-    costs = []
-    benefits = [precision5, precision10, recall5, recall10, ndcg5, ndcg10]
+    # precision5 = tm_objs[0] - sm_objs[0]
+    # precision10 = tm_objs[1] - sm_objs[1]
+    # recall5 = tm_objs[2] - sm_objs[2]
+    # recall10 = tm_objs[3] - sm_objs[3]
+    # ndcg5 = tm_objs[4] - sm_objs[4]
+    # ndcg10 = tm_objs[5] - sm_objs[5]
+    # costs = []
+    # benefits = [precision5, precision10, recall5, recall10, ndcg5, ndcg10]
+
+    # ModsNet
+    accuracy = tm_objs[0] - sm_objs[0]
+    precision = tm_objs[1] - sm_objs[1]
+    recall = tm_objs[2] - sm_objs[2]
+    f1 = tm_objs[3] - sm_objs[3]
+    auc = tm_objs[4] - sm_objs[4]
+    time = tm_objs[5] - sm_objs[5]
+    costs = [time]
+    benefits = [accuracy, precision, recall, f1, auc]
 
     return u, v, costs, benefits
 
@@ -238,9 +265,15 @@ def get_cmin_bmax(G):
     # c_min = [model_objectives_mins[2]]
     # b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1], model_objectives_maxs[0]]
     # modsnet
-    c_min = []
-    b_max = [model_objectives_maxs[0], model_objectives_maxs[1],  model_objectives_maxs[2],
-              model_objectives_maxs[3],  model_objectives_maxs[4], model_objectives_maxs[5]]
+    # c_min = []
+    # b_max = [model_objectives_maxs[0], model_objectives_maxs[1],  model_objectives_maxs[2],
+    #           model_objectives_maxs[3],  model_objectives_maxs[4], model_objectives_maxs[5]]
+    # mental
+    c_min = [model_objectives_mins[5]]
+    b_max = [model_objectives_maxs[0], model_objectives_maxs[1], model_objectives_maxs[2],
+             model_objectives_maxs[3], model_objectives_maxs[4]]
+
+    c_min = [0.0001 if c <= 0 else c for c in c_min]
 
     return c_min, b_max
 
@@ -290,9 +323,13 @@ def get_pareto(G, s, r, t, c_min, b_max, max_length):
     # c = [G.nodes[s]['model_objectives'][2]]
     # b = [G.nodes[s]['feature_objectives'][0], G.nodes[s]['feature_objectives'][1], G.nodes[s]['model_objectives'][1], G.nodes[s]['model_objectives'][0]]
     # modsnet
-    c = []
+    # c = []
+    # b = [G.nodes[s]['model_objectives'][0], G.nodes[s]['model_objectives'][1], G.nodes[s]['model_objectives'][2],
+    #      G.nodes[s]['model_objectives'][3], G.nodes[s]['model_objectives'][4], G.nodes[s]['model_objectives'][5]]
+    # mental
+    c = [G.nodes[s]['model_objectives'][5]]
     b = [G.nodes[s]['model_objectives'][0], G.nodes[s]['model_objectives'][1], G.nodes[s]['model_objectives'][2],
-         G.nodes[s]['model_objectives'][3], G.nodes[s]['model_objectives'][4], G.nodes[s]['model_objectives'][5]]
+         G.nodes[s]['model_objectives'][3], G.nodes[s]['model_objectives'][4]]
 
     pos_s = pos((None, tuple(c), tuple(b), None, None), r, c_min, b_max)
     Pi[0][s][str(pos_s)] = (G.nodes[s]['Label'], tuple(c), tuple(b), None, None)
@@ -358,21 +395,26 @@ def main():
     # t = [2]
     # model_path = '../Surrogate/House/house_surrogate.joblib'
     # ModsNet
+    # r = [1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1]
+    # t = []
+    # mental
     r = [1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1]
-    t = []
+    t = [0.45]
     # model_path = model_path.replace("/", "\\")
+
 
     start = time.time()
     logging.info("Nodes objectives...")
     # nodes_objectives(G, model_path)
-    cluter_counts = get_cluster_counts_modsnet() #ModsNet
-    G = get_objectives_modsnet(cluter_counts) #ModsNet
-    pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
-    logging.info("Edges costs/benefits...")
-    costs_benefits(G)
-    end = time.time()
-    logging.info(f"Cost/Benefit Calculation Time: {end - start}")
-    pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
+    # cluter_counts = get_cluster_counts()
+    # G = get_objectives_batch(cluter_counts)
+    # pickle.dump(G, open(dataset + 'objectives.gpickle', 'wb'))
+    # logging.info("Edges costs/benefits...")
+    # costs_benefits(G)
+    # end = time.time()
+    # logging.info(f"Cost/Benefit Calculation Time: {end - start}")
+    # pickle.dump(G, open(dataset + 'costs.gpickle', 'wb'))
+
 
     G = pickle.load(open(dataset + 'costs.gpickle', 'rb'))
     logging.info(f"epsilon: {epsilon}")

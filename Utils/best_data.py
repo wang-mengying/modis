@@ -1,6 +1,7 @@
 import json
 import pandas as pd
 import sample_nodes as sample
+from Algorithms.si_direct_backup import dataset
 
 
 def get_best_apx(pareto):
@@ -113,7 +114,7 @@ def process_files(file_paths, output_file_path, algorithm, cost_only=False):
         elif cost_only:
             bests = get_best_bi_cost_only(data)
 
-    results[file_path.split("/")[-1]] = bests
+        results[file_path.split("/")[-1]] = bests
 
     with open(output_file_path, "w") as file:
         json.dump(results, file, indent=4)
@@ -136,8 +137,10 @@ def generate_excel(results, data, output_excel):
             # bests['c1'][1][0],
             # bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2], bests['b4'][2][3]
             # modsnet
-            bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2], bests['b4'][2][3], bests['b3'][2][4], bests['b4'][2][5]
-
+            # bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2], bests['b4'][2][3], bests['b5'][2][4], bests['b6'][2][5]
+            # mental
+            bests['c1'][1][0],
+            bests['b1'][2][0], bests['b2'][2][1], bests['b3'][2][2], bests['b4'][2][3], bests['b5'][2][4]
         ]
         data_for_excel.append(row_data)
 
@@ -178,16 +181,17 @@ def generate_csv(results, data, output_csv):
     df = pd.DataFrame(data_for_csv, columns=["Id", "Label"])
 
     # df = sample.cal_objectives_movie(df, "../Dataset/Kaggle/others/movie_clustered_table.csv")
-    df = sample.cal_objectives_house(df, "../Dataset/OpenData/House/processed/house_original.csv",
-                                     "../Dataset/OpenData/House/processed/house_clustered.csv")
+    # df = sample.cal_objectives_house(df, "../Dataset/OpenData/House/processed/house_original.csv",
+    #                                  "../Dataset/OpenData/House/processed/house_clustered.csv")
+    df = sample.cal_objectives_mental(df, "../Dataset/Mental/uni_table_clustered.csv")
 
     df.to_csv(output_csv, mode='a', header=False, index=False)
 
 
 def main():
     algorithms = ["apx", "no", "bi", "div"]
-    # results = "../Dataset/OpenData/House/results/ml2/"
-    results = "../Dataset/ModsNet/results/ml6/"
+    data_path = "../Dataset/Mental/results/"
+    results = data_path + "ml6/"
 
     if "HuggingFace" in results:
         cost_only = True
@@ -195,11 +199,11 @@ def main():
         cost_only = False
 
     for algorithm in algorithms:
-        # input_files = [results + algorithm + item for item in ["0.1.json", "0.2.json", "0.3.json", "0.4.json", "0.5.json"]]
+        # input_files = [results + algorithm + item for item in ["0.02.json", "0.05.json", "0.08.json", "0.11.json", "0.14.json", "0.17.json", "0.2.json"]]
         input_files = [results + algorithm + item for item in ["0.02.json"]]
         output_json = results + algorithm + "_best.json"
         output_excel = results + algorithm + "_best.xlsx"
-        output_csv = results + algorithm + "_best.csv"
+        output_csv = data_path + algorithm + "_best.csv"
 
         process_files(input_files, output_json, algorithm)
 
@@ -211,7 +215,7 @@ def main():
         else:
             generate_excel(results, data, output_excel)
 
-        # generate_csv(results, data, output_csv)
+        generate_csv(results, data, output_csv)
 
 
 if __name__ == "__main__":

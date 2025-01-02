@@ -11,6 +11,7 @@ import Trainer.movie_gradient_boosting as mgb_movie
 
 from Algorithms.si_direct import get_cmin_bmax, get_cmin
 from Algorithms.si_direct import get_cluster_counts_modsnet as cluster_modsnet
+from Algorithms.si_direct import get_cluster_counts as cluster
 from Utils.graph_igraph_table import pad_tuple
 import Utils.sample_nodes as sample
 import Trainer.house_random_forest as house_random_forest
@@ -18,10 +19,10 @@ import Trainer.house_random_forest as house_random_forest
 sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
-Data = "../Dataset/ModsNet/"
+Data = "../Dataset/Mental/"
 max_length = 6
 
-# dataset = Data + "1108/"
+# dataset = Data + "0813/"
 dataset = Data + "results/ml" + str(max_length) + "/"
 dataset = dataset.replace('/', '\\')
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
@@ -55,13 +56,19 @@ def cal_box_cost_only(path, epsilon, c_min):
     return tuple(box)
 
 
-def costs_benefits(state, model_path='../Surrogate/ModsNet/modsnet_surrogate.joblib'.replace('/', '\\'),
-                   cluster_file='../Dataset/ModsNet/processed/graph_clustered.txt'.replace('/', '\\'),
-                   record_path="../Surrogate/ModsNet/sample_nodes.csv".replace('/', '\\')):
+def costs_benefits(state, model_path='../Surrogate/Mental/mental_surrogate.joblib'.replace('/', '\\'),
+                   cluster_file='../Dataset/Mental/uni_table_clustered.csv'.replace('/', '\\'),
+                   record_path="../Surrogate/Mental/sample_nodes.csv".replace('/', '\\')):
 
     if "ModsNet" in cluster_file:
         cluster_count_dict = cluster_modsnet(clustered_file=cluster_file)
-        output = costs_benefits_modsnet(state, cluster_count_dict, model_path, record_path)
+        output = costs_benefits_batch(state, cluster_count_dict, model_path, record_path)
+
+        return output
+
+    if "Mental" in cluster_file:
+        cluster_count_dict = cluster(file_path=cluster_file)
+        output = costs_benefits_batch(state, cluster_count_dict, model_path, record_path)
 
         return output
 
@@ -104,40 +111,45 @@ def costs(state, model_path='../Surrogate/HuggingFace/hf_surrogate.joblib',
     return costs
 
 
-def costs_benefits_modsnet(state, cluster_count_dict, model_path, record_path):
+def costs_benefits_batch(state, cluster_count_dict, model_path, record_path):
     # Load the model inside the worker process
     model = joblib.load(model_path)
     record = pd.read_csv(record_path)
 
     node = {}
+    # state = pad_tuple(str(state))
     node['Label'] = str(state)
     features, clusters = state[0], state[1]
 
-    data = {
-        "active_items": [features.count(1)],
-        "active_values": [clusters.count(1)],
-        "num_rows": [sum(count for cluster_id, count in cluster_count_dict.items() if clusters[cluster_id])],
-        "num_cols": [sum(features[:9]) + (8 if any(features[9:]) else 0)],
-        **{f'feature_{i + 1}': [state] for i, state in enumerate(features)},
-        **{f'cluster_{i + 1}': [state] for i, state in enumerate(clusters)},
-    }
-    print(data)
+    # data = {
+    #     "active_items": [features.count(1)],
+    #     "active_values": [clusters.count(1)],
+    #     "num_rows": [sum(count for cluster_id, count in cluster_count_dict.items() if clusters[cluster_id])],
+    #     # "num_cols": [sum(features[:9]) + (8 if any(features[9:]) else 0)], #modsnet
+    #     "num_cols": [sum(features)+1],
+    #     **{f'feature_{i + 1}': [state] for i, state in enumerate(features)},
+    #     **{f'cluster_{i + 1}': [state] for i, state in enumerate(clusters)},
+    # }
 
-    metric_columns = ["precision@5", "precision@10", "recall@5", "recall@10", "ndcg@5", "ndcg@10"]
+    # modsnet
+    # metric_columns = ["precision@5", "precision@10", "recall@5", "recall@10", "ndcg@5", "ndcg@10"]
+    # mental
+    metric_columns = ['accuracy', 'precision', 'recall', 'f1', 'auc', 'time']
     if node['Label'] in record["Label"].values:
         metrics = record.loc[record["Label"] == node['Label'], metric_columns].iloc[0].tolist()
         model_objectives = metrics
 
-    # Check the condition: if the 3rd digit in clusters (index 2) is 0
-    elif clusters[2] == 0:
-        model_objectives = [0, 0, 0, 0, 0, 0]
+    # Check the condition: if the 3rd digit in clusters (index 2) is 0 (ModsNet)
+    # elif clusters[2] == 0:
+    #     model_objectives = [0, 0, 0, 0, 0, 0]
 
     else:
         data = {
             "active_items": [features.count(1)],
             "active_values": [clusters.count(1)],
             "num_rows": [sum(count for cluster_id, count in cluster_count_dict.items() if clusters[cluster_id])],
-            "num_cols": [sum(features[:9]) + (8 if any(features[9:]) else 0)],
+            "num_cols": [sum(features) + 1],
+            # "num_cols": [sum(features[:9]) + (8 if any(features[9:]) else 0)] # modsnet,
             **{f'feature_{i + 1}': [state] for i, state in enumerate(features)},
             **{f'cluster_{i + 1}': [state] for i, state in enumerate(clusters)},
         }
@@ -145,9 +157,12 @@ def costs_benefits_modsnet(state, cluster_count_dict, model_path, record_path):
         df = pd.DataFrame(data)
         model_objectives = list(model.predict(df)[0])
 
-
-    costs = []
-    benefits = model_objectives
+    # modsnet
+    # costs = []
+    # benefits = model_objectives
+    #mental
+    costs = model_objectives[5:]
+    benefits = model_objectives[:5]
 
     return [costs, benefits]
 
@@ -229,10 +244,14 @@ def obj2cb(G, node):
     #             G.nodes[node]['model_objectives'][0]]
 
     # modsnet
-    costs = []
+    # costs = []
+    # benefits = [G.nodes[node]['model_objectives'][0], G.nodes[node]['model_objectives'][1], G.nodes[node]['model_objectives'][2],
+    #             G.nodes[node]['model_objectives'][3], G.nodes[node]['model_objectives'][4], G.nodes[node]['model_objectives'][5]]
 
+    # mental
+    costs = [G.nodes[node]['model_objectives'][5]]
     benefits = [G.nodes[node]['model_objectives'][0], G.nodes[node]['model_objectives'][1], G.nodes[node]['model_objectives'][2],
-                G.nodes[node]['model_objectives'][3], G.nodes[node]['model_objectives'][4], G.nodes[node]['model_objectives'][5],]
+                G.nodes[node]['model_objectives'][3], G.nodes[node]['model_objectives'][4]]
 
     return [costs, benefits]
 
@@ -611,80 +630,89 @@ def pre_clusters(df, target, classif=True):
 
 
 def main():
-    G = pickle.load(open('../Dataset/ModsNet/results/ml6/costs.gpickle', 'rb'))
-    costs_benefits((tuple([1] * 10), tuple([1] * 13)))
+    G = pickle.load(open('../Dataset/Mental/results/ml6/costs.gpickle', 'rb'))
 
-    # # start_node = 0
-    # # end_node = 37653
-    # e = 0.02
-    # epsilon = [e] * 6
-    # # epsilon = [e] * 5
-    # feature = 10
-    # cluster = 13
-    #
-    # if "Kaggle" in Data or "Scale" in Data:
-    #     c_min, b_max = get_cmin_bmax(G)
-    #     clusters = pd.read_csv('../Dataset/Kaggle/others/movie_clustered_table.csv')
-    #     clusters = mgb_movie.preprocess_data(clusters)
+    # start_node = 0
+    # end_node = 37653
+    e = 0.02
+    epsilon = [e] * 6
+    # epsilon = [e] * 5
+    feature = 19
+    cluster = 12
+
+    if "Kaggle" in Data or "Scale" in Data:
+        c_min, b_max = get_cmin_bmax(G)
+        clusters = pd.read_csv('../Dataset/Kaggle/others/movie_clustered_table.csv')
+        clusters = mgb_movie.preprocess_data(clusters)
+        pre = pre_clusters(clusters, 'gross_class')
+        indices = [pre[i] for i in pre.keys()]
+
+        start_state = (tuple([1] * feature), tuple([1] * cluster))
+        end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
+
+        start_time = time.time()
+        # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
+        pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+        end_time = time.time()
+
+    elif "House" in Data:
+        c_min, b_max = get_cmin_bmax(G)
+        clusters = pd.read_csv(Data + 'processed/house_clustered.csv')
+        X, y, _ = house_random_forest.process_data(clusters)
+        clusters = pd.concat([X, y], axis=1)
+        pre = pre_clusters(clusters, 'PRICE_CLASS')
+        indices = [pre[i] for i in pre.keys()]
+
+        start_state = (tuple([1] * feature), tuple([1] * cluster))
+        end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
+
+        start_time = time.time()
+        pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+        end_time = time.time()
+
+    # elif "HuggingFace" in Data:
+    #     c_min = get_cmin(G)
+    #     clusters = pd.read_csv(Data + 'clustered_table.csv')
+    #     clusters = mgb.preprocess_data(clusters)
     #     pre = pre_clusters(clusters, 'gross_class')
     #     indices = [pre[i] for i in pre.keys()]
     #
-    #     start_state = (tuple([1] * feature), tuple([1] * cluster))
-    #     end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
+    #     clusters = pd.read_csv(Data + 'clustered_table.csv')
+    #     indices = pre_clusters(clusters, None, None)
     #
-    #     start_time = time.time()
-    #     # pareto = bi_directional_search(G, pareto_set, start_node, end_node, epsilon, c_min, b_max)
-    #     pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
-    #     end_time = time.time()
+    #     start_state = (tuple([1] * 11), tuple([1] * 11))
+    #     end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
     #
-    # elif "House" in Data:
-    #     c_min, b_max = get_cmin_bmax(G)
-    #     clusters = pd.read_csv(Data + 'processed/house_clustered.csv')
-    #     X, y, _ = house_random_forest.process_data(clusters)
-    #     clusters = pd.concat([X, y], axis=1)
-    #     pre = pre_clusters(clusters, 'PRICE_CLASS')
-    #     indices = [pre[i] for i in pre.keys()]
-    #
-    #     start_state = (tuple([1] * feature), tuple([1] * cluster))
-    #     end_state = (tuple([0] * feature), tuple(1 if i in indices else 0 for i in range(cluster)))
-    #
-    #     start_time = time.time()
-    #     pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
-    #     end_time = time.time()
-    #
-    # # elif "HuggingFace" in Data:
-    # #     c_min = get_cmin(G)
-    # #     clusters = pd.read_csv(Data + 'clustered_table.csv')
-    # #     clusters = mgb.preprocess_data(clusters)
-    # #     pre = pre_clusters(clusters, 'gross_class')
-    # #     indices = [pre[i] for i in pre.keys()]
-    # #
-    # #     clusters = pd.read_csv(Data + 'clustered_table.csv')
-    # #     indices = pre_clusters(clusters, None, None)
-    # #
-    # #     start_state = (tuple([1] * 11), tuple([1] * 11))
-    # #     end_state = (tuple([0] * 11), tuple(1 if i in indices else 0 for i in range(11)))
-    # #
-    # #     start_state = (tuple([1] * 12), tuple([1] * 10))
-    # #     end_state = (tuple([0] * 12), tuple(1 if i in indices else 0 for i in range(10)))
-    #
-    # elif "ModsNet" in Data:
-    #     c_min, b_max = get_cmin_bmax(G)
-    #
-    #     start_state = (tuple([1] * feature), tuple([1] * cluster))
-    #     end_state = (tuple([0] * feature), (0, 0, 1) + tuple([0] * (cluster-3)))
-    #
-    #     start_time = time.time()
-    #     pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
-    #     end_time = time.time()
-    #
-    # logging.info(f"epsilon: {epsilon}")
-    # logging.info(f"max_length: {max_length}")
-    # logging.info(f"Search time: {end_time - start_time}")
-    # logging.info(f"Pareto set size: {len(pareto)}")
-    # pareto_json = json.dumps(pareto, indent=4)
-    # with open(dataset + '/no' + str(e) + '.json', 'w') as json_file:
-    #     json_file.write(pareto_json)
+    #     start_state = (tuple([1] * 12), tuple([1] * 10))
+    #     end_state = (tuple([0] * 12), tuple(1 if i in indices else 0 for i in range(10)))
+
+    elif "ModsNet" in Data:
+        c_min, b_max = get_cmin_bmax(G)
+
+        start_state = (tuple([1] * feature), tuple([1] * cluster))
+        end_state = (tuple([0] * feature), (0, 0, 1) + tuple([0] * (cluster-3)))
+
+        start_time = time.time()
+        pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+        end_time = time.time()
+
+    elif "Mental" in Data:
+        c_min, b_max = get_cmin_bmax(G)
+
+        start_state = (tuple([1] * feature), tuple([1] * cluster))
+        end_state = (tuple([0] * feature), tuple([0] * (cluster)))
+
+        start_time = time.time()
+        pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+        end_time = time.time()
+
+    logging.info(f"epsilon: {epsilon}")
+    logging.info(f"max_length: {max_length}")
+    logging.info(f"Search time: {end_time - start_time}")
+    logging.info(f"Pareto set size: {len(pareto)}")
+    pareto_json = json.dumps(pareto, indent=4)
+    with open(dataset + '/no' + str(e) + '.json', 'w') as json_file:
+        json_file.write(pareto_json)
 
 
 if __name__ == '__main__':

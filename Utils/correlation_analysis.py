@@ -64,14 +64,14 @@ def preprocessing_house(json_file):
     return df
 
 
-def get_relations(json_file, task, threshold=0.75):
+def get_relations(json_file, task, threshold=0.9):
     if task == 'movie':
         df = preprocessing_movie(json_file)
     elif task == 'avocado':
         df = preprocessing_avocado(json_file)
     elif task == 'house':
         df = preprocessing_house(json_file)
-    elif task == 'modsnet':
+    elif task == 'modsnet' or task == 'mental':
         data = pd.read_csv(json_file)
         numeric_columns = data.select_dtypes(include=['number']).columns
         df = data[numeric_columns]
@@ -93,10 +93,10 @@ def main():
     # json_file = '../Dataset/Kaggle/others/d7m8/nodes.json'
     # json_file = '../Dataset/HuggingFace/results/ml2/nodes.json'
     # json_file = '../Dataset/OpenData/House/results/ml6/nodes.json'
-    json_file = '../Surrogate/ModsNet/sample_nodes.csv'
+    json_file = '../Surrogate/Mental/sample_nodes.csv'
     json_file = json_file.replace('/', '\\')
 
-    strong_relations = get_relations(json_file, 'modsnet', threshold=0.93)
+    strong_relations = get_relations(json_file, 'mental', threshold=0.9)
     print(strong_relations)
 
 

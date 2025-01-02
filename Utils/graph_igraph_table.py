@@ -1,3 +1,5 @@
+import os
+
 from igraph import Graph
 import math
 import csv
@@ -59,7 +61,7 @@ def generate_graph(features, clusters, t_drop=0.7, t_modify=0.8, max_depth=2):
     return graph, state_to_id
 
 
-def pad_tuple(input_str):
+def pad_tuple(input_str, feature_length=10, cluster_length=13):
     # Remove unwanted whitespaces and line breaks
     cleaned_str = ''.join(input_str.split())
 
@@ -70,18 +72,21 @@ def pad_tuple(input_str):
         raise ValueError("Invalid tuple format")
 
     # Function to pad inner tuples
-    def pad_inner_tuple(inner_tuple):
-        return inner_tuple + (0,) * (11 - len(inner_tuple))
+    def pad_inner_tuple(inner_tuple, target_length):
+        return inner_tuple[:target_length] + (0,) * max(0, target_length - len(inner_tuple))
 
     # Pad each inner tuple
-    padded_tuples = tuple(pad_inner_tuple(inner_tuple) for inner_tuple in input_tuple)
+    padded_tuples = (
+        pad_inner_tuple(input_tuple[0], feature_length),
+        pad_inner_tuple(input_tuple[1], cluster_length)
+    )
 
     return padded_tuples
 
-# e
+
 def main():
-    features = 10
-    clusters = 13
+    features = 19
+    clusters = 12
     max_length = 6
     scale = False
     start = time.time()
@@ -92,12 +97,19 @@ def main():
         graph, state_to_id = generate_graph(features, clusters, 0.75, 0.8, max_length)
     elif features == 10 and clusters == 13:
         graph, state_to_id = generate_graph(features, clusters, 0.7, 0.7, max_length)
+    elif features == 19 and clusters == 12:
+        graph, state_to_id = generate_graph(features, clusters, 0.8, 0.85, max_length)
     else:
         graph, state_to_id = generate_graph(features, clusters, max_depth=max_length)
     end = time.time()
     print(end - start)
-    dataset = "../Dataset/ModsNet/results/"
-    # dataset = "../Example/small/t_cluster/maxl/"
+
+    # formatted_features = f"{features:02d}"
+    # formatted_clusters = f"{clusters:02d}"
+    # dataset = f"../Dataset/ModsNet/results/scalability/{formatted_features}{formatted_clusters}/"
+
+    dataset = f"../Dataset/Mental/results/ml{max_length}/"
+    os.makedirs(dataset, exist_ok=True)
 
     # Nodes
     with open(dataset + 'nodes.csv', 'w', newline='') as csvfile:

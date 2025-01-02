@@ -15,8 +15,8 @@ from multiprocessing import Pool
 sys.path.append("../")
 import Dataset.Kaggle.others.movie_objectives as movie_objectives
 
-Data = "../Dataset/House/"
-max_length = 4
+Data = "../Dataset/ModsNet/"
+max_length = 6
 
 dataset = Data + "results/ml" + str(max_length) + "/"
 # dataset = dataset.replace('/', '\\')

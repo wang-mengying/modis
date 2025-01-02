@@ -2,6 +2,7 @@ import ast
 import json
 import logging
 import math
+import os
 import pickle
 import sys
 import time
@@ -14,7 +15,8 @@ import joblib
 
 from Algorithms.si_direct import get_cmin_bmax, get_cmin
 from Algorithms.si_direct import get_cluster_counts_modsnet as cluster_modsnet
-from Algorithms.bi_direct import costs_benefits_modsnet
+from Algorithms.bi_direct import costs_benefits_batch
+from Algorithms.si_direct import get_cluster_counts as cluster
 from Utils.graph_igraph_table import pad_tuple
 
 sys.path.append("../")
@@ -25,10 +27,10 @@ import Utils.correlation_analysis as correlation_analysis
 # Data = "../Dataset/Kaggle/"
 # Data = "../Dataset/Scale/"
 # Data = "../Dataset/OpenData/House/"
-Data = "../Dataset/ModsNet/"
+Data = "../Dataset/Mental/"
 max_length = 6
 
-# dataset = Data + "1011/"
+# dataset = Data + "0613/"
 dataset = Data + "results/ml" + str(max_length) + "/"
 dataset = dataset.replace('/', '\\')
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
@@ -45,6 +47,10 @@ elif "ModsNet" in Data:
     samples = '../Surrogate/ModsNet/sample_nodes.csv'.replace('/', '\\')
     records = pd.read_csv(samples)
     relations = correlation_analysis.get_relations(samples, 'modsnet', threshold=0.93)
+elif "Mental" in Data:
+    samples = '../Surrogate/Mental/sample_nodes.csv'.replace('/', '\\')
+    records = pd.read_csv(samples)
+    relations = correlation_analysis.get_relations(samples, 'mental', threshold=0.9)
 
 
 def cal_box_cost_only(path, epsilon, c_min):
@@ -58,13 +64,19 @@ def cal_box_cost_only(path, epsilon, c_min):
     return tuple(box)
 
 
-def costs_benefits(state, model_path='../Surrogate/ModsNet/modsnet_surrogate.joblib'.replace('/', '\\'),
-                   cluster_file='../Dataset/ModsNet/processed/graph_clustered.txt'.replace('/', '\\'),
-                   record_path="../Surrogate/ModsNet/sample_nodes.csv".replace('/', '\\')):
+def costs_benefits(state, model_path='../Surrogate/Mental/mental_surrogate.joblib'.replace('/', '\\'),
+                   cluster_file='../Dataset/Mental/uni_table_clustered.csv'.replace('/', '\\'),
+                   record_path="../Surrogate/Mental/sample_nodes.csv".replace('/', '\\')):
 
     if "ModsNet" in cluster_file:
         cluster_count_dict = cluster_modsnet(clustered_file=cluster_file)
-        output = costs_benefits_modsnet(state, cluster_count_dict, model_path, record_path)
+        output = costs_benefits_batch(state, cluster_count_dict, model_path, record_path)
+
+        return output
+
+    if "Mental" in cluster_file:
+        cluster_count_dict = cluster(file_path=cluster_file)
+        output = costs_benefits_batch(state, cluster_count_dict, model_path, record_path)
 
         return output
 
@@ -140,44 +152,60 @@ def costs_benefits_part(state, cluster_file='../Dataset/OpenData/House/processed
 
 
 def costs_benefits_modsnet_part(state, cluster_count_dict,
-                                record_path='../Dataset/ModsNet/results/ml6/nodes.json'.replace('/', '\\'),
-                                model_path='../Surrogate/ModsNet/modsnet_surrogate.joblib'.replace('/', '\\')):
-    with open(record_path, 'r') as f:
-        record = json.load(f)
+                                record_path='../Surrogate/Mental/sample_nodes.csv'.replace('/', '\\'),
+                                model_path='../Surrogate/Mental/mental_surrogate.joblib'.replace('/', '\\')):
+
+    record = pd.read_csv(record_path)
+
     # Load the model inside the worker process
     model = joblib.load(model_path)
 
     node = {}
+    # state = pad_tuple(str(state))
     node['Label'] = str(state)
     features, clusters = state[0], state[1]
 
-    def get_model_objectives(json_data, label):
-        for key, value in json_data.items():
-            if value.get("Label") == label:
-                return value.get("model_objectives", [])
-        return None
+    # modsnet
+    # metric_columns = ["precision@5", "precision@10", "recall@5", "recall@10", "ndcg@5", "ndcg@10"]
+    # if node['Label'] in record["Label"].values:
+    #     metrics = record.loc[record["Label"] == node['Label'], metric_columns].iloc[0].tolist()
+    #     model_objectives = metrics[:3] + [None, None, None]
+    # # Check the condition: if the 3rd digit in clusters (index 2) is 0
+    # elif clusters[2] == 0:
+    #     model_objectives = [0, 0, 0] + [None, None, None]
 
-    model_objectives = get_model_objectives(record, node['Label'])
-    if model_objectives:
-        model_objectives = model_objectives[:3] + [None, None, None]
+    # mental
+    metric_columns = ['accuracy', 'precision', 'recall', 'f1', 'auc', 'time']
+    if node['Label'] in record["Label"].values:
+        metrics = record.loc[record["Label"] == node['Label'], metric_columns].iloc[0].tolist()
+        model_objectives = [metrics[0], metrics[1], None, metrics[3], None, metrics[5]]
 
-    # Check the condition: if the 3rd digit in clusters (index 2) is 0
-    elif clusters[2] == 0:
-        model_objectives = [0, 0, 0] + [None, None, None]
     else:
         data = {
             "active_items": [features.count(1)],
             "active_values": [clusters.count(1)],
             "num_rows": [sum(count for cluster_id, count in cluster_count_dict.items() if clusters[cluster_id])],
-            "num_cols": [sum(features[:9]) + (8 if any(features[9:]) else 0)],
+            "num_cols": [sum(features) + 1],
+            # "num_cols": [sum(features[:9]) + (8 if any(features[9:]) else 0)] # modsnet,
             **{f'feature_{i + 1}': [state] for i, state in enumerate(features)},
             **{f'cluster_{i + 1}': [state] for i, state in enumerate(clusters)},
         }
         df = pd.DataFrame(data)
-        model_objectives = list(model.predict(df)[0])[:3] + [None, None, None]
+        # model_objectives = list(model.predict(df)[0])[:3] + [None, None, None] #modsnet
+        # mental
+        metrics = list(model.predict(df)[0])
+        model_objectives = [metrics[0], metrics[1], None, metrics[3], None, metrics[5]]
 
-    costs = []
-    benefits = model_objectives
+    # modsnet
+    # costs = []
+    # benefits = model_objectives
+    # mental
+    costs = model_objectives[5:]
+    benefits = model_objectives[:5]
+
+    # # save state, cost, benefit into a csv file
+    df = pd.DataFrame([[state, costs, benefits]], columns=['Label', 'Costs', 'Benefits'])
+    df.to_csv(dataset+'part_table.csv', mode='a', header=False, index=False)
 
     return [costs, benefits]
 
@@ -277,7 +305,7 @@ def fill_missing_objectives_cost_only(state, nodes_json):
     return costs
 
 
-def fill_missing_objectives(state):
+def fill_missing_objectives(state, part_table=dataset+'part_table.csv'):
     # Movie
     # costs, benefits = costs_benefits_part(state)
     # c = ['vif', 'training_time', 'complexity']
@@ -288,11 +316,28 @@ def fill_missing_objectives(state):
     # c = ['training_time']
     # b = ['fisher', 'mutual_info', 'f1', 'accuracy']
 
-    # ModsNet
-    cluster_count_dict = cluster_modsnet()
-    costs, benefits = costs_benefits_modsnet_part(state, cluster_count_dict)
-    c = []
-    b = ['precision@5', 'precision@10', 'recall@5', 'recall@10', 'ndcg@5', 'ndcg@10']
+    # cluster_count_dict = cluster_modsnet() # ModsNet
+    cluster_count_dict = cluster() # Mental
+
+    if os.path.exists(part_table):
+        record = pd.read_csv(part_table, header=None)
+        # state = pad_tuple(str(state))
+        label = str(state)
+        if label in record[0].values:
+            node_info = record[record[0] == label].iloc[0]
+            costs = ast.literal_eval(node_info[1])
+            benefits = ast.literal_eval(node_info[2])
+        else:
+            costs, benefits = costs_benefits_modsnet_part(state, cluster_count_dict)
+    else:
+        costs, benefits = costs_benefits_modsnet_part(state, cluster_count_dict)
+
+    # modsnet
+    # c = []
+    # b = ['precision@5', 'precision@10', 'recall@5', 'recall@10', 'ndcg@5', 'ndcg@10']
+    # mental
+    c = ['time']
+    b = ['accuracy','precision','recall','f1','auc']
 
     node = {}
     node['Label'] = str(state)
@@ -704,15 +749,15 @@ def pre_clusters(df, target, classif=True):
 
 
 def main():
-    G = pickle.load(open('../Dataset/ModsNet/results/ml6/costs.gpickle', 'rb'))
+    G = pickle.load(open('../Dataset/Mental/results/ml6/costs.gpickle', 'rb'))
 
     # start_node = 0
     # end_node = 37653
     e = 0.02
     # epsilon = [e] * 5
     epsilon = [e] * 6
-    feature = 10
-    cluster = 13
+    feature = 19
+    cluster = 12
 
     if "Kaggle" in Data or "Scale" in Data:
         c_min, b_max = get_cmin_bmax(G)
@@ -747,6 +792,17 @@ def main():
 
         start_state = (tuple([1] * feature), tuple([1] * cluster))
         end_state = (tuple([0] * feature), (0, 0, 1) + tuple([0] * (cluster-3)))
+
+        logging.info(f"Start state: {start_state}")
+        logging.info(f"End state: {end_state}")
+        start_time = time.time()
+        pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
+        end_time = time.time()
+    elif "Mental" in Data:
+        c_min, b_max = get_cmin_bmax(G)
+
+        start_state = (tuple([1] * feature), tuple([1] * cluster))
+        end_state = (tuple([0] * feature), tuple([0] * (cluster)))
 
         start_time = time.time()
         pareto = bi_directional_search_state(start_state, end_state, epsilon, c_min, b_max, max_length)
