@@ -4,6 +4,7 @@ import math
 import pickle
 import random
 import time
+from scipy.spatial.distance import hamming
 
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -12,8 +13,8 @@ import si_direct as single
 import divmodis_solo as solo
 
 # Data = "../Dataset/HuggingFace/"
-# Data = "../Dataset/OpenData/House/"
-Data = "../Dataset/Mental/"
+Data = "../Dataset/OpenData/House/"
+# Data = "../Dataset/Kaggle/"
 logging.basicConfig(filename=Data+'log.txt', level=logging.INFO, format='%(message)s')
 
 
@@ -127,9 +128,15 @@ def pairwise_distance(u, v, pareto, euclidean_max, a):
     euclidean = np.linalg.norm(np.array(u_pos) - np.array(v_pos))
     euclidean_nor = euclidean / euclidean_max
 
-    cosine = (1 - cosine_similarity([u_label, v_label])[0][0]) / 2
+    # Compute normalized Hamming distance
+    hamming_distance = hamming(u_label, v_label) * len(u_label)  # Actual Hamming distance
+    hamming_nor = hamming_distance / len(u_label)
 
-    distance = a * euclidean_nor + (1 - a) * cosine
+    # cosine = (1 - cosine_similarity([u_label, v_label])[0][0]) / 2
+
+    distance = (1-a) * euclidean_nor + a * hamming_nor
+
+    # print(f"Euclidean: {euclidean_nor}, Hamming: {hamming_nor}")
 
     return distance
 
@@ -172,10 +179,11 @@ def main():
     length = 6
     epsilon = 0.02
     algorithm = "no"
-    size = 6
+    size = 10
+    a = 1
     cost_only = False
-    r = [1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
-    # r = [1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
+    # r = [1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
+    r = [1 + epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon, 1 - epsilon]
     # dataset = Data + "0613/"
     dataset = Data + "results/ml" + str(length) + "/"
     dataset = dataset.replace('/', '\\')
@@ -197,7 +205,7 @@ def main():
         c_max, b_min = solo.get_cmax_bmin(G)
         print("Getting pivot set...")
         start = time.time()
-        pivot = get_pivot(pareto, size, c_min, b_max, c_max, b_min, r)
+        pivot = get_pivot(pareto, size, c_min, b_max, c_max, b_min, r, a)
         end = time.time()
         logging.info(f"Number of pivot nodes: {len(pivot)}")
         logging.info(f"DivMODis search time: {end - start}\n")
@@ -206,7 +214,7 @@ def main():
         print("Getting pivot set...")
         start = time.time()
         r = [1 + epsilon, 1 + epsilon, 1 + epsilon]
-        pivot = get_pivot_cost_only(pareto, size, c_min, c_max, r)
+        pivot = get_pivot_cost_only(pareto, size, c_min, c_max, r, a)
         end = time.time()
         logging.info(f"Number of pivot nodes: {len(pivot)}")
         logging.info(f"DivMODis search time: {end - start}\n")
@@ -214,7 +222,7 @@ def main():
     print("Outputting pivot")
     pivot_nodes = {node_pos: pareto[node_pos] for node_pos in pivot}
     pivot_json = json.dumps(pivot_nodes, indent=4)
-    with open(dataset + 'div' + str(epsilon) + '.json', 'w') as json_file:
+    with open(dataset + 'div' + str(epsilon) + str(int(a*10))+'.json', 'w') as json_file:
         json_file.write(pivot_json)
 
 

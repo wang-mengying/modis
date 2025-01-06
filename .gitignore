@@ -215,4 +215,5 @@ si_direct_backup.py
 */note.txt
 Dataset/*/results/*
 Dataset/ModsNet/scalability/*
+Utils/figures/output/*
 

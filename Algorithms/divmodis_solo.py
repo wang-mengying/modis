@@ -78,13 +78,13 @@ def get_cmax_bmin(G):
     # b_min = [feature_objectives_mins[0], feature_objectives_mins[1], model_objectives_mins[1]]
 
     # House
-    # c_max = [model_objectives_maxs[2]]
-    # b_min = [feature_objectives_mins[0], feature_objectives_mins[1], model_objectives_mins[1], model_objectives_mins[0]]
+    c_max = [model_objectives_maxs[2]]
+    b_min = [feature_objectives_mins[0], feature_objectives_mins[1], model_objectives_mins[1], model_objectives_mins[0]]
 
     # ModsNet
-    c_max = []
-    b_min = [model_objectives_maxs[0], model_objectives_maxs[1],  model_objectives_maxs[2],
-              model_objectives_maxs[3],  model_objectives_maxs[4], model_objectives_maxs[5]]
+    # c_max = []
+    # b_min = [model_objectives_maxs[0], model_objectives_maxs[1],  model_objectives_maxs[2],
+    #           model_objectives_maxs[3],  model_objectives_maxs[4], model_objectives_maxs[5]]
 
 
     return c_max, b_min

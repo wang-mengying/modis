@@ -262,16 +262,16 @@ def get_cmin_bmax(G):
     # c_min = [feature_objectives_mins[2], model_objectives_mins[0], model_objectives_mins[2]]
     # b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1]]
     # House
-    # c_min = [model_objectives_mins[2]]
-    # b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1], model_objectives_maxs[0]]
+    c_min = [model_objectives_mins[2]]
+    b_max = [feature_objectives_maxs[0], feature_objectives_maxs[1], model_objectives_maxs[1], model_objectives_maxs[0]]
     # modsnet
     # c_min = []
     # b_max = [model_objectives_maxs[0], model_objectives_maxs[1],  model_objectives_maxs[2],
     #           model_objectives_maxs[3],  model_objectives_maxs[4], model_objectives_maxs[5]]
     # mental
-    c_min = [model_objectives_mins[5]]
-    b_max = [model_objectives_maxs[0], model_objectives_maxs[1], model_objectives_maxs[2],
-             model_objectives_maxs[3], model_objectives_maxs[4]]
+    # c_min = [model_objectives_mins[5]]
+    # b_max = [model_objectives_maxs[0], model_objectives_maxs[1], model_objectives_maxs[2],
+    #          model_objectives_maxs[3], model_objectives_maxs[4]]
 
     c_min = [0.0001 if c <= 0 else c for c in c_min]
 
